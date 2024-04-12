@@ -16,7 +16,7 @@ This project has been done by (alphabetically ordered):
 
 First start by cloning the repository:
 ```bash
-git clone https://github.com/vita-epfl/DLAV-project.git
+git clone https://github.com/alessandrodalbesio/DLAV-project.git
 cd DLAV-project
 ```
 
