@@ -23,7 +23,7 @@ cd DLAV-project
 Then make a virtual environment and install the required packages. 
 ```bash
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate # .\venv\Scripts\activate.bat
 
 # Install MetaDrive Simulator
 cd ~/  # Go to the folder you want to host these two repos.
