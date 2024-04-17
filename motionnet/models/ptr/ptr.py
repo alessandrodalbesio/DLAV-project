@@ -304,7 +304,17 @@ class PTR(BaseModel):
         :return: (T, B, N, H)
         '''
         ######################## Your code here ########################
-        pass
+        
+        for time_step in range(agents_emb.shape[0]):
+            # Manipulate the features
+            features = agents_emb[time_step,:,:,:].permute(1,0,2)
+
+            # Make the mask compatible with the layer
+            mask = agent_masks[:,time_step,:]
+
+            # Apply the layer (B,N,H -> order chosen based on the documentation)
+            agents_emb[time_step,:,:,:] = layer(features, src_key_padding_mask=mask).permute(1,0,2)
+
         ################################################################
         return agents_emb
 
