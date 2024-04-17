@@ -264,8 +264,34 @@ class PTR(BaseModel):
         :return: (T, B, N, H)
         '''
         ######################## Your code here ########################
-        pass
-        ################################################################
+
+        ## Apply positional encoding to the agents embeddings (not efficient, but it works) ##
+        
+        # Define the positional encoding layer
+        positional_encoding = PositionalEncoding(agents_emb.shape[-1], dropout=0.0, max_len=agents_emb.shape[0])
+
+        # Apply the positional encoding to the agents embeddings
+        encoded_agents_emb = torch.zeros_like(agents_emb)
+        for batch_number in range(agents_emb.shape[1]):
+            for agent_number in range(agents_emb.shape[2]):
+                elem_to_encode = agents_emb[:, batch_number, agent_number, :]
+                elem_to_encode = elem_to_encode.unsqueeze(0)
+                elem_to_encode = positional_encoding(elem_to_encode)
+                encoded_agents_emb[:, batch_number, agent_number, :] = elem_to_encode.squeeze(0)
+
+        ## Apply temporal attention layer ##
+        for agent in range(agents_emb.shape[2]):
+            # Manipulate the features
+            features = encoded_agents_emb[:,:,agent,:]
+
+            # Make the mask compatible with the layer
+            mask = agent_masks[:,:,agent]
+
+            # Apply the layer (T,B,H -> order chosen based on the documentation)
+            agents_emb[:,:,agent,:] = layer(features, src_key_padding_mask=mask)
+
+        
+        ## Return the agents embeddings ##
         return agents_emb
 
     def social_attn_fn(self, agents_emb, agent_masks, layer):
@@ -305,8 +331,26 @@ class PTR(BaseModel):
         agents_emb = self.agents_dynamic_encoder(agents_tensor).permute(1, 0, 2, 3)  # T, B, N, H
 
         ######################## Your code here ########################
+
+        ### Note ###
+        # T = Past time steps information to be used for prediction
+        # B = Batch size
+        # N = Number of agents in the scene (ego + agents)
+        # H = d_k = Size of the encoded state (x and y position of the agent)
+
+        ## Sizes of the tensors ##
+        # env_masks: [366,21]
+        # opps_masks: [61,21,16]
+        # agents_tensor: [61,21,16,2]
+        # ego_tensor: [61,21,2]
+        # _agents_tensor: [61,21,15,2]
+
+
         # Apply temporal attention layers and then the social attention layers on agents_emb, each for L_enc times.
-        pass
+        for l in range(self.L_enc):
+            agents_emb = self.temporal_attn_fn(agents_emb, opps_masks, self.temporal_attn_layers[l])
+            agents_emb = self.social_attn_fn(agents_emb, opps_masks, self.social_attn_layers[l])
+
         ################################################################
 
         ego_soctemp_emb = agents_emb[:, :, 0]  # take ego-agent encodings only.
