@@ -263,35 +263,22 @@ class PTR(BaseModel):
         :param agent_masks: (B, T, N)
         :return: (T, B, N, H)
         '''
-        ######################## Your code here ########################
 
-        ## Apply positional encoding to the agents embeddings (not efficient, but it works) ##
+        # Get the sizes of the tensors
+        (T, B, N, H) = agents_emb.shape
         
-        # Define the positional encoding layer
-        positional_encoding = PositionalEncoding(agents_emb.shape[-1], dropout=0.0, max_len=agents_emb.shape[0])
+        # Apply the positional encoding
+        positional_encoding = PositionalEncoding(H,max_len=T)
 
         # Apply the positional encoding to the agents embeddings
-        encoded_agents_emb = torch.zeros_like(agents_emb)
-        for batch_number in range(agents_emb.shape[1]):
-            for agent_number in range(agents_emb.shape[2]):
-                elem_to_encode = agents_emb[:, batch_number, agent_number, :]
-                elem_to_encode = elem_to_encode.unsqueeze(0)
-                elem_to_encode = positional_encoding(elem_to_encode)
-                encoded_agents_emb[:, batch_number, agent_number, :] = elem_to_encode.squeeze(0)
+        agents_emb = agents_emb.reshape(T,B*N,H)
+        agents_emb = positional_encoding(agents_emb)
 
-        ## Apply temporal attention layer ##
-        for agent in range(agents_emb.shape[2]):
-            # Manipulate the features
-            features = encoded_agents_emb[:,:,agent,:]
+        # Apply the layer
+        agent_masks = agent_masks.permute(1,2,0).reshape(B*N,T)
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks).reshape(T,B,N,H)
 
-            # Make the mask compatible with the layer
-            mask = agent_masks[:,:,agent]
-
-            # Apply the layer (T,B,H -> order chosen based on the documentation)
-            agents_emb[:,:,agent,:] = layer(features, src_key_padding_mask=mask)
-
-        
-        ## Return the agents embeddings ##
+        # Return the agents embeddings
         return agents_emb
 
     def social_attn_fn(self, agents_emb, agent_masks, layer):
@@ -303,19 +290,15 @@ class PTR(BaseModel):
         :param agent_masks: (B, T, N)
         :return: (T, B, N, H)
         '''
-        ######################## Your code here ########################
-        
-        for time_step in range(agents_emb.shape[0]):
-            # Manipulate the features
-            features = agents_emb[time_step,:,:,:].permute(1,0,2)
 
-            # Make the mask compatible with the layer
-            mask = agent_masks[:,time_step,:]
+        # Get the sizes of the tensors
+        (T, B, N, H) = agents_emb.shape
 
-            # Apply the layer (B,N,H -> order chosen based on the documentation)
-            agents_emb[time_step,:,:,:] = layer(features, src_key_padding_mask=mask).permute(1,0,2)
+        # Apply the layer
+        agent_masks = agent_masks.permute(1,2,0).reshape(B*N,T)
+        agents_emb = layer(agents_emb.reshape(T,B*N,H), src_key_padding_mask=agent_masks).reshape(T,B,N,H)
 
-        ################################################################
+        # Return the agents embeddings        
         return agents_emb
 
     def _forward(self, inputs):
@@ -349,12 +332,11 @@ class PTR(BaseModel):
         # H = d_k = Size of the encoded state (x and y position of the agent)
 
         ## Sizes of the tensors ##
-        # env_masks: [366,21]
-        # opps_masks: [61,21,16]
-        # agents_tensor: [61,21,16,2]
-        # ego_tensor: [61,21,2]
-        # _agents_tensor: [61,21,15,2]
-
+        # env_masks: [192,21]
+        # opps_masks: [32,21,16]
+        # agents_tensor: [32,21,16,2]
+        # ego_tensor: [32,21,2]
+        # _agents_tensor: [32,21,15,2]
 
         # Apply temporal attention layers and then the social attention layers on agents_emb, each for L_enc times.
         for l in range(self.L_enc):

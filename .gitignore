@@ -167,3 +167,9 @@ cython_debug/
 
 # Third party modules (even if they are not tracked by git)
 .modules/
+
+# Datasets 
+.datasets/
+
+# Temporary folder
+*tmp/
