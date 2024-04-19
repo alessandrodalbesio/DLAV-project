@@ -268,15 +268,10 @@ class PTR(BaseModel):
         (T, B, N, H) = agents_emb.shape
         
         # Apply the positional encoding
-        positional_encoding = PositionalEncoding(H,max_len=T)
+        agents_emb = PositionalEncoding(H,max_len=T)(agents_emb.reshape(T,B*N,H))
 
-        # Apply the positional encoding to the agents embeddings
-        agents_emb = agents_emb.reshape(T,B*N,H)
-        agents_emb = positional_encoding(agents_emb)
-
-        # Apply the layer
-        agent_masks = agent_masks.permute(1,2,0).reshape(B*N,T)
-        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks).reshape(T,B,N,H)
+        # Apply the transformer layer
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks.permute(1,2,0).reshape(B*N,T)).reshape(T,B,N,H)
 
         # Return the agents embeddings
         return agents_emb
@@ -294,9 +289,8 @@ class PTR(BaseModel):
         # Get the sizes of the tensors
         (T, B, N, H) = agents_emb.shape
 
-        # Apply the layer
-        agent_masks = agent_masks.permute(1,2,0).reshape(B*N,T)
-        agents_emb = layer(agents_emb.reshape(T,B*N,H), src_key_padding_mask=agent_masks).reshape(T,B,N,H)
+        # Apply the transformer layer
+        agents_emb = layer(agents_emb.reshape(T,B*N,H), src_key_padding_mask=agent_masks.permute(1,2,0).reshape(B*N,T)).reshape(T,B,N,H)
 
         # Return the agents embeddings        
         return agents_emb
@@ -323,27 +317,10 @@ class PTR(BaseModel):
         # encode each agent's dynamic state using a linear layer (k_attr --> d_k)
         agents_emb = self.agents_dynamic_encoder(agents_tensor).permute(1, 0, 2, 3)  # T, B, N, H
 
-        ######################## Your code here ########################
-
-        ### Note ###
-        # T = Past time steps information to be used for prediction
-        # B = Batch size
-        # N = Number of agents in the scene (ego + agents)
-        # H = d_k = Size of the encoded state (x and y position of the agent)
-
-        ## Sizes of the tensors ##
-        # env_masks: [192,21]
-        # opps_masks: [32,21,16]
-        # agents_tensor: [32,21,16,2]
-        # ego_tensor: [32,21,2]
-        # _agents_tensor: [32,21,15,2]
-
         # Apply temporal attention layers and then the social attention layers on agents_emb, each for L_enc times.
         for l in range(self.L_enc):
             agents_emb = self.temporal_attn_fn(agents_emb, opps_masks, self.temporal_attn_layers[l])
             agents_emb = self.social_attn_fn(agents_emb, opps_masks, self.social_attn_layers[l])
-
-        ################################################################
 
         ego_soctemp_emb = agents_emb[:, :, 0]  # take ego-agent encodings only.
 
