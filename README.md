@@ -26,16 +26,11 @@ python3 -m venv venv
 source venv/bin/activate # .\venv\Scripts\activate.bat
 
 # Install MetaDrive Simulator
-cd ~/  # Go to the folder you want to host these two repos.
-git clone https://github.com/metadriverse/metadrive.git
-cd metadrive
-pip install -e.
+pip install git+https://github.com/metadriverse/metadrive.git
 
 # Install ScenarioNet
-cd ~/  # Go to the folder you want to host these two repos.
-git clone https://github.com/metadriverse/scenarionet.git
-cd scenarionet
-pip install -e .
+pip install git+https://github.com/metadriverse/scenarionet.git
+
 ```
 
 Finally, install Unitraj and login to wandb via:
@@ -46,10 +41,3 @@ pip install -e .
 wandb login
 ```
 If you don't have a wandb account, you can create one [here](https://wandb.ai/site). It is a free service for open-source projects and you can use it to log your experiments and compare different models easily.
-
-
-You can verify the installation via running the training script:
-```bash
-python train.py method=ptr
-```
-The incomplete PTR model will be trained on several samples of data available in `motionnet/data_samples`.
