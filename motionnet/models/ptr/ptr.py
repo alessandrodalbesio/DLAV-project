@@ -123,7 +123,8 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_parameter('pe', nn.Parameter(pe, requires_grad=False))
 
-    def forward(self, x):
+    def forward(self, x, device=torch.device("cpu")):
+        self.pe.to(device)
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
@@ -266,12 +267,18 @@ class PTR(BaseModel):
 
         # Get the sizes of the tensors
         (T, B, N, H) = agents_emb.shape
-        
+
         # Apply the positional encoding
-        agents_emb = PositionalEncoding(H,max_len=T)(agents_emb.reshape(T,B*N,H))
+        agents_emb = agents_emb.reshape(T,B*N,H) # (T, B*N, H)
+        agents_emb = self.pos_encoder(agents_emb)
+
+        # Prepare the agent mask
+        agent_masks = agent_masks.permute(0,2,1).reshape(-1,T) # (B*N, T)
+        agent_masks[:,-1][agent_masks.sum(-1) == T] = False # Ensures no NaNs due to empty rows.
 
         # Apply the transformer layer
-        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks.permute(1,2,0).reshape(B*N,T)).reshape(T,B,N,H)
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(T,B,N,H)
 
         # Return the agents embeddings
         return agents_emb
@@ -289,8 +296,18 @@ class PTR(BaseModel):
         # Get the sizes of the tensors
         (T, B, N, H) = agents_emb.shape
 
+        # Prepare the agent mask
+        agents_emb = agents_emb.permute(2,1,0,3) # (N, B, T, H)
+        agents_emb = agents_emb.reshape(N,B*T,H) # (N, B*T, H)
+
+        # Prepare the agent mask
+        agent_masks = agent_masks.reshape(-1,N) # (B*T, N)
+        agent_masks[:,-1][agent_masks.sum(-1) == N] = False # Ensures no NaNs due to empty rows.
+
         # Apply the transformer layer
-        agents_emb = layer(agents_emb.reshape(T,B*N,H), src_key_padding_mask=agent_masks.permute(1,2,0).reshape(B*N,T)).reshape(T,B,N,H)
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(N,B,T,H)
+        agents_emb = agents_emb.permute(2,1,0,3)
 
         # Return the agents embeddings        
         return agents_emb

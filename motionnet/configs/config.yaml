@@ -1,8 +1,9 @@
 # exp setting
-exp_name: 'test'
-ckpt_path: null
+exp_name: 'test-attention'
+ckpt_path: Null
 seed: 42
-debug: True
+debug: False
+local_training: True
 devices: [0]
 
 # data related
