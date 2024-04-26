@@ -43,10 +43,10 @@ wandb login
 If you don't have a wandb account, you can create one [here](https://wandb.ai/site). It is a free service for open-source projects and you can use it to log your experiments and compare different models easily.
 
 ## Source files
-# ptr.py
+### ptr.py
 Prediction, Trajectory, Representation. 
 The Python script defines a neural network model specifically designed for predicting future trajectories of agents in a dynamic environment, using a combination of convolutional and transformer-based architectures to process both image-based and point-based map data. It utilizes attention mechanisms to integrate social and temporal contexts, predicting multiple possible future paths by generating trajectory distributions, and calculates associated probabilities for each predicted mode.
-# train.py
+### train.py
 This Python script uses PyTorch Lightning and Hydra to set up and execute the training of a machine learning model, with configurations loaded and managed dynamically via Hydra from a specified directory. It prepares the training and validation datasets, utilizes data loaders with custom batch sizes, and sets up a training loop with model checkpoints based on validation performance, supporting both local and distributed training environments depending on the configuration.
 
 
@@ -56,7 +56,7 @@ This Python script uses PyTorch Lightning and Hydra to set up and execute the tr
 3) Update config.yaml and ptr.yaml with the desired hyperparameters, variable names and data paths.
 4) Run the sbatch file on your terminal
 
-# Grid Search implementation
+### Grid Search implementation
 In order to look for the best parameters, execute the file run_scheduler.sbatch. It will call both test_generator.py and scheduler.sh :
 *scheduler.sh* :
 This Bash script activates a Python virtual environment, iterates through a directory of experiment configurations, copies specific configuration files into a designated directory, and then executes a training script for each configuration using PyTorch Lightning.
