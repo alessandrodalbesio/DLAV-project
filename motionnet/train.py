@@ -19,11 +19,6 @@ def train(cfg):
     OmegaConf.set_struct(cfg, False)  # Open the struct
     cfg = OmegaConf.merge(cfg, cfg.method)
 
-    # Save the config file to a config folder
-    save_path = os.path.join(os.getcwd(), "training_configs")
-    os.makedirs(save_path, exist_ok=True)
-    OmegaConf.save(cfg, os.path.join(save_path, f"{cfg.exp_name}.yaml"))
-
     # Build the model
     model = build_model(cfg)
 

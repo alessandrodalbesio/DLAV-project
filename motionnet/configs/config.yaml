@@ -1,7 +1,7 @@
 # exp setting
-exp_name: 'test-attention'
+exp_name: 'prt-6'
 ckpt_path: Null
-seed: 42
+seed: 50
 debug: False
 local_training: True
 devices: [0]

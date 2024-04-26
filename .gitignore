@@ -168,14 +168,14 @@ cython_debug/
 # Third party modules (even if they are not tracked by git)
 .modules/
 
-# Datasets 
+# Ignore all datasets
 .datasets/
 
-# Temporary folder
-*tmp/
-
-# wandb data
+# Ignore wandb logs
 *wandb/
 
-# Checkpoints
-motionnet/motionnet
+# Ignore the trained models
+motionnet/motionnet/
+
+# Ignore the submission file
+submission.csv

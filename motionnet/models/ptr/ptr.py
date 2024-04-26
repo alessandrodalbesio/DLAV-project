@@ -302,7 +302,6 @@ class PTR(BaseModel):
 
         # Prepare the agent mask
         agent_masks = agent_masks.reshape(-1,N) # (B*T, N)
-        agent_masks[:,-1][agent_masks.sum(-1) == N] = False # Ensures no NaNs due to empty rows.
 
         # Apply the transformer layer
         agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
@@ -404,10 +403,15 @@ class PTR(BaseModel):
 
 
     def configure_optimizers(self):
+        #optimizer = optim.Adam(self.parameters(), lr= self.config['learning_rate'],eps=0.0001)
+        #scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,verbose=True)
+        #return [optimizer], [scheduler]
+        
+        # Define a Adam optimizer that decreases when the loss plateaus
         optimizer = optim.Adam(self.parameters(), lr= self.config['learning_rate'],eps=0.0001)
-        scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,
-                                           verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
         return [optimizer], [scheduler]
+
 
 
 class Criterion(nn.Module):
