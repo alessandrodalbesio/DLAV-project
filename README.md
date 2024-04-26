@@ -58,8 +58,10 @@ This Python script uses PyTorch Lightning and Hydra to set up and execute the tr
 
 ### Grid Search implementation
 In order to look for the best parameters, execute the file run_scheduler.sbatch. It will call both test_generator.py and scheduler.sh :
+
 *scheduler.sh* :
 This Bash script activates a Python virtual environment, iterates through a directory of experiment configurations, copies specific configuration files into a designated directory, and then executes a training script for each configuration using PyTorch Lightning.
+
 *test_generator.py*:
 This Python script generates a series of configuration files for machine learning experiments, varying parameters like learning rate, batch size, and learning rate scheduler intervals, and saves these configurations into a structured directory format for subsequent execution.
 
