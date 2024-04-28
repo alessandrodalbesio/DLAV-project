@@ -123,7 +123,8 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_parameter('pe', nn.Parameter(pe, requires_grad=False))
 
-    def forward(self, x):
+    def forward(self, x, device=torch.device("cpu")):
+        self.pe.to(device)
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
@@ -263,9 +264,23 @@ class PTR(BaseModel):
         :param agent_masks: (B, T, N)
         :return: (T, B, N, H)
         '''
-        ######################## Your code here ########################
-        pass
-        ################################################################
+
+        # Get the sizes of the tensors
+        (T, B, N, H) = agents_emb.shape
+
+        # Apply the positional encoding
+        agents_emb = agents_emb.reshape(T,B*N,H) # (T, B*N, H)
+        agents_emb = self.pos_encoder(agents_emb)
+
+        # Prepare the agent mask
+        agent_masks = agent_masks.permute(0,2,1).reshape(-1,T) # (B*N, T)
+        agent_masks[:,-1][agent_masks.sum(-1) == T] = False # Ensures no NaNs due to empty rows.
+
+        # Apply the transformer layer
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(T,B,N,H)
+
+        # Return the agents embeddings
         return agents_emb
 
     def social_attn_fn(self, agents_emb, agent_masks, layer):
@@ -277,9 +292,23 @@ class PTR(BaseModel):
         :param agent_masks: (B, T, N)
         :return: (T, B, N, H)
         '''
-        ######################## Your code here ########################
-        pass
-        ################################################################
+
+        # Get the sizes of the tensors
+        (T, B, N, H) = agents_emb.shape
+
+        # Prepare the agent mask
+        agents_emb = agents_emb.permute(2,1,0,3) # (N, B, T, H)
+        agents_emb = agents_emb.reshape(N,B*T,H) # (N, B*T, H)
+
+        # Prepare the agent mask
+        agent_masks = agent_masks.reshape(-1,N) # (B*T, N)
+
+        # Apply the transformer layer
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(N,B,T,H)
+        agents_emb = agents_emb.permute(2,1,0,3)
+
+        # Return the agents embeddings        
         return agents_emb
 
     def _forward(self, inputs):
@@ -304,10 +333,10 @@ class PTR(BaseModel):
         # encode each agent's dynamic state using a linear layer (k_attr --> d_k)
         agents_emb = self.agents_dynamic_encoder(agents_tensor).permute(1, 0, 2, 3)  # T, B, N, H
 
-        ######################## Your code here ########################
         # Apply temporal attention layers and then the social attention layers on agents_emb, each for L_enc times.
-        pass
-        ################################################################
+        for l in range(self.L_enc):
+            agents_emb = self.temporal_attn_fn(agents_emb, opps_masks, self.temporal_attn_layers[l])
+            agents_emb = self.social_attn_fn(agents_emb, opps_masks, self.social_attn_layers[l])
 
         ego_soctemp_emb = agents_emb[:, :, 0]  # take ego-agent encodings only.
 
@@ -374,10 +403,15 @@ class PTR(BaseModel):
 
 
     def configure_optimizers(self):
+        #optimizer = optim.Adam(self.parameters(), lr= self.config['learning_rate'],eps=0.0001)
+        #scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,verbose=True)
+        #return [optimizer], [scheduler]
+        
+        # Define a Adam optimizer that decreases when the loss plateaus
         optimizer = optim.Adam(self.parameters(), lr= self.config['learning_rate'],eps=0.0001)
-        scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,
-                                           verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
         return [optimizer], [scheduler]
+
 
 
 class Criterion(nn.Module):
