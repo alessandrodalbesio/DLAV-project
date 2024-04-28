@@ -48,33 +48,16 @@ def train(cfg):
         val_set, batch_size=eval_batch_size, num_workers=cfg.load_num_workers, shuffle=False, drop_last=False,
     collate_fn=train_set.collate_fn)
 
-    if cfg.local_training:
-        # Verify if cuda is available
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        is_on_CPU = device == torch.device("cpu")
-
-        # Set the trainer
-        trainer = pl.Trainer(
-            max_epochs=cfg.method.max_epochs,
-            logger= None if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),
-            devices=1 if is_on_CPU else cfg.devices,
-            gradient_clip_val=cfg.method.grad_clip_norm,
-            accelerator="cpu" if is_on_CPU else "gpu",
-            profiler="simple",
-            strategy="auto",
-            callbacks=call_backs
-        )
-    else:
-        trainer = pl.Trainer(
-            max_epochs=cfg.method.max_epochs,
-            logger= None if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),
-            devices=1 if cfg.debug else cfg.devices,
-            gradient_clip_val=cfg.method.grad_clip_norm,
-            accelerator="cpu" if cfg.debug else "gpu",
-            profiler="simple",
-            strategy="auto" if cfg.debug else "ddp",
-            callbacks=call_backs
-        )
+    trainer = pl.Trainer(
+        max_epochs=cfg.method.max_epochs,
+        logger= None if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),
+        devices=1 if cfg.debug else cfg.devices,
+        gradient_clip_val=cfg.method.grad_clip_norm,
+        accelerator="cpu" if cfg.debug else "gpu",
+        profiler="simple",
+        strategy="auto" if cfg.debug else "ddp",
+        callbacks=call_backs
+    )
 
     if cfg.ckpt_path is not None:
         trainer.validate(model=model, dataloaders=val_loader, ckpt_path=cfg.ckpt_path)

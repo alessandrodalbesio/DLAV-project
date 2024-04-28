@@ -1,9 +1,8 @@
 # exp setting
-exp_name: 'prt-6'
+exp_name: 'test'
 ckpt_path: Null
-seed: 50
+seed: 42
 debug: False
-local_training: True
 devices: [0]
 
 # data related
@@ -11,7 +10,7 @@ load_num_workers: 0
 persistent_workers: False
 train_data_path: ["../.datasets/train"]
 val_data_path: ["../.datasets/val"]
-max_data_num: [1000]
+max_data_num: [1000000]
 past_len: 21 # 0.1s
 future_len: 60 # 0.1s
 object_type: ['VEHICLE'] #, 'PEDESTRIAN', 'CYCLIST']
