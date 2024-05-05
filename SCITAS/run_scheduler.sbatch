@@ -9,8 +9,5 @@
 #SBATCH --output logs/log_%j.log
 #SBATCH --output logs/out_%j.out
 
-# Run the python file to generate the test cases
-python test_generator.py
-
 # Run the batch file 
 bash scheduler.sh
