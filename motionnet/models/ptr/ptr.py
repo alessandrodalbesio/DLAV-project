@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from motionnet.models.base_model.base_model import BaseModel
-from torch.optim.lr_scheduler import MultiStepLR
+from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
 from torch import optim
 from scipy import special
 from torch.distributions import MultivariateNormal, Laplace
@@ -269,15 +269,15 @@ class PTR(BaseModel):
 
         # Apply the positional encoding
         agents_emb = agents_emb.reshape(T,B*N,H) # (T, B*N, H)
-        agents_emb = self.pos_encoder(agents_emb) # Apply the positional encoding
+        agents_emb = self.pos_encoder(agents_emb)
 
         # Prepare the agent mask
         agent_masks = agent_masks.permute(0,2,1).reshape(-1,T) # (B*N, T)
         agent_masks[:,-1][agent_masks.sum(-1) == T] = False # Ensures no NaNs due to empty rows.
 
         # Apply the transformer layer
-        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks) # Apply the transformer layer (T, B*N, H)
-        agents_emb = agents_emb.reshape(T,B,N,H) # (T, B, N, H)
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(T,B,N,H)
 
         # Return the agents embeddings
         return agents_emb
@@ -303,9 +303,9 @@ class PTR(BaseModel):
         agent_masks = agent_masks.reshape(-1,N) # (B*T, N)
 
         # Apply the transformer layer
-        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks) # Apply the transformer layer (N, B*T, H)
-        agents_emb = agents_emb.reshape(N,B,T,H) # (N, B, T, H)
-        agents_emb = agents_emb.permute(2,1,0,3) # (T, B, N, H)
+        agents_emb = layer(agents_emb, src_key_padding_mask=agent_masks)
+        agents_emb = agents_emb.reshape(N,B,T,H)
+        agents_emb = agents_emb.permute(2,1,0,3)
 
         # Return the agents embeddings        
         return agents_emb
@@ -399,13 +399,35 @@ class PTR(BaseModel):
         loss = self.criterion(prediction, ground_truth,inputs['center_gt_final_valid_idx'])
         return loss
 
-
-
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr= self.config['learning_rate'],eps=0.0001)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
-        return [optimizer], [scheduler]
+        # Define the dictionary with the optimizer configuration
+        opti_config = {}
 
+        # Define the optimizer
+        optimizer_selected = self.config['optimizer'].lower()
+        if optimizer_selected == 'adam':
+            optimizer = optim.Adam(self.parameters(), lr=self.config['learning_rate'],eps=0.0001)
+        elif optimizer_selected == 'adamw':
+            optimizer = optim.AdamW(self.parameters(), lr=self.config['learning_rate'],eps=0.0001)
+        elif optimizer_selected == 'sgd':
+            optimizer = optim.SGD(self.parameters(), lr=self.config['learning_rate'], momentum=0.9)
+        else:
+            raise NotImplementedError(f"Optimizer {optimizer_selected} not implemented yet")
+        opti_config['optimizer'] = optimizer
+
+        # Define the scheduler
+        scheduler_selected = self.config['scheduler']
+        if scheduler_selected == 'multistep':
+            scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,verbose=True)
+        elif scheduler_selected == 'plateau':
+            scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, verbose=True)
+            opti_config['monitor'] = self.config['scheduler_monitor']
+        else:
+            raise NotImplementedError(f"Scheduler {scheduler_selected} not implemented yet")
+        opti_config['lr_scheduler'] = scheduler
+
+        # Return the optimizer and the scheduler
+        return opti_config
 
 
 class Criterion(nn.Module):

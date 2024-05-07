@@ -2,7 +2,7 @@
 exp_name: 'test'
 ckpt_path: Null
 seed: 42
-debug: False
+debug: True
 devices: [0]
 
 # data related

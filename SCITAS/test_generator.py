@@ -1,26 +1,26 @@
 ## Parameters definition ##
 data = {
-  "seed": [0],
+  "seed": [37],
   "past_len": [21],
   "future_len": [60],
-  "num_modes": [1,5],
-  "hidden_size": [64,128,256],
-  "num_encoder_layers": [1],
-  "num_decoder_layers": [1],
-  "tx_hidden_size": [1],
-  "tx_num_heads": [1],
+  "num_modes": [6],
+  "hidden_size": [128],
+  "num_encoder_layers": [2],
+  "num_decoder_layers": [4],
+  "tx_hidden_size": [384],
+  "tx_num_heads": [16],
   "dropout": [0.1],
   "max_epochs": [100],
   "learning_rate": [0.0005],
-  "learning_rate_scheduler": [[15,25,45,55,65,75]],
+  "learning_rate_scheduler": [[15, 25, 45, 55, 65, 75]],
   "train_batch_size": [256]
 }
 
+name = "num_dec_layers=4,ep=100"
 ########################################################################################
 
 ## Import the libraries ##
 import os
-import json
 import numpy as np
 import argparse
 
@@ -47,13 +47,16 @@ def main(experiments_folder_name, config_name, method_name):
 
     # Define all the combinations
     exp_num = 0
-    for i in cartesian(indeces):
+    cart_index = cartesian(indeces)
+    print(f"Total number of experiments: {len(cart_index)}")
+    for i in cart_index:
         data_exp = {}
         for k in range(len(keys)):
             data_exp[keys[k]] = data[keys[k]][i[k]]    
-
+    
         # Get the configuration files
-        config, ptr = get_config_files(user, f"{user}_exp_{i}", data_exp)
+        exp_name = f"{name}_{exp_num}" if name is not None else f"exp_{i}"
+        config, ptr = get_config_files(user, exp_name, data_exp)
 
         # Create the directory
         dir_name = f"exp_{exp_num}"
@@ -160,8 +163,8 @@ load_num_workers: 0
 train_data_path: ['/home/{user}/DLAV-project/.datasets/train']
 val_data_path: ['/home/{user}/DLAV-project/.datasets/val']
 max_data_num: [1000000]
-past_len: '{data['past_len']}' # 2.1 s
-future_len: '{data['future_len']}' # 6 s
+past_len: {data['past_len']} # 2.1 s
+future_len: {data['future_len']} # 6 s
 object_type: ['VEHICLE'] #, 'PEDESTRIAN', 'CYCLIST']
 line_type: ['lane','stop_sign','road_edge','road_line','crosswalk','speed_bump'] #['lane','stop_sign','road_edge','road_line','crosswalk','speed_bump']
 masked_attributes: ['z_axis, size'] # 'z_axis, size, velocity, acceleration, heading'
@@ -200,7 +203,7 @@ max_epochs: {data['max_epochs']}
 learning_rate: {data['learning_rate']}
 learning_rate_sched: {data['learning_rate_scheduler']}
 optimizer: Adam 
-scheduler: multistep 
+scheduler: multistep
 ewc_lambda: 2000
 train_batch_size: {data['train_batch_size']}
 eval_batch_size: 256
@@ -221,7 +224,7 @@ vector_break_dist_thresh: 1.0
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--experiments_folder_name", type=str, default=None)
-    args.add_argument("--dst_file_config", type=str, default=None)
-    args.add_argument("--dst_file_ptr", type=str, default=None)    
+    args.add_argument("--config_name", type=str, default=None)
+    args.add_argument("--method_name", type=str, default=None)    
     args = args.parse_args()
-    main(args.experiments_folder_name, args.dst_file_config, args.dst_file_ptr)
+    main(args.experiments_folder_name, args.config_name, args.method_name)

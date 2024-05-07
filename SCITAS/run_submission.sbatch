@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=50000
 #SBATCH --time=00:30:00
-#SBATCH --output logs/log_%j.log
-#SBATCH --output logs/out_%j.out
+#SBATCH --output SCITAS/logs/log_%j.log
+#SBATCH --output SCITAS/logs/out_%j.out
 
 # Activate the virtual environment and run the script
 source ~/DLAV-project/.venv/bin/activate

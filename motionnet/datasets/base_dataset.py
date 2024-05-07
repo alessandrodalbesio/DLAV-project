@@ -434,6 +434,7 @@ class BaseDataset(Dataset):
         get_trajectory_type(output)
 
         return output
+    
     def collate_fn(self, data_list):
         batch_list = []
         for batch in data_list:
