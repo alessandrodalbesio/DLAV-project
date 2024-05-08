@@ -32,5 +32,8 @@ point_sampled_interval: 1
 num_points_each_polyline: 20
 vector_break_dist_thresh: 1.0
 
-
-
+# Data augmentation
+hide_car_perc: 0.1
+hide_car_prob: 0.2
+noisy_car_perc: 0.3
+noisy_car_prob: 0.4
