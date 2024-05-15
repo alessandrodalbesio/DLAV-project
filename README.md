@@ -63,6 +63,7 @@ This YAML file contains the default configuration settings for the training scri
 Here you can also define your optimizer and your scheduler. Currently we support the followings: 
 - Optimizer: Adam ("adam"), AdamW ("adamw"), SGD ("sgd") ;
 - Scheduler: Multistep ("multistep"), Plateau ("plateau").
+Note that in case of multistep scheduler you can specify the learning rate decade in "learning_rate_sched"
 Other optimizers or schedulers can be added in the config.yaml file.
 
 ### `test_generator.py`
