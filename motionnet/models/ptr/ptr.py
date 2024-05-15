@@ -324,8 +324,6 @@ class PTR(BaseModel):
         '''
         ego_in, agents_in, roads = inputs['ego_in'], inputs['agents_in'], inputs['roads']
 
-        breakpoint()
-
         B = ego_in.size(0)
         # Encode all input observations (k_attr --> d_k)
         ego_tensor, _agents_tensor, opps_masks, env_masks = self.process_observations(ego_in, agents_in)

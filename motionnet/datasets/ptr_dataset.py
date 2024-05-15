@@ -1,79 +1,96 @@
 from .base_dataset import BaseDataset
+import numpy as np
 
 class PTRDataset(BaseDataset):
-
     def __init__(self, config=None, is_validation=False):
         super().__init__(config, is_validation)
-        # Load the configuration
-        self._hide_car_perc = config.method.hide_car_perc
-        self._hide_car_prob = config.method.hide_car_prob
-        self._noisy_car_perc = config.method.noisy_car_perc
-        self._noisy_car_prob = config.method.noisy_car_prob
         
-        print(f"Hide car perc: {self._hide_car_perc}")
-        print(f"Hide car prob: {self._hide_car_prob}")
-        print(f"Noisy car perc: {self._noisy_car_perc}")
-        print(f"Noisy car prob: {self._noisy_car_prob}")
+        # Get the augmentation mode from the config
+        self.aug_mode = config['aug_mode']
+        assert self.aug_mode in ['none', 'on_circle', 'in_circle', 'hide_car'], 'Invalid augmentation mode: {}'.format(self.aug_mode)
+        if self.aug_mode == 'none': # Skip the rest of the initialization if the augmentation mode is 'none'
+            return 
 
-    def _hide_car(self,perc_car=0.5,prob_point=0.5):
-        """
-        TODO
+        # Define the parameters based on the mode
+        if self.aug_mode == 'on_circle' or self.aug_mode == 'in_circle':
+            self._radius = config['radius']
+        self._prob_car = config['prob_car']
+        self._prob_aug = config['prob_aug']
+        
 
-        Args:
-            perc_car (float): Percentage of the car to hide
-            prob_point (float): Probability of hiding a point in the car trajectory
-        """
-        # Validate the input data
-        assert perc_car >= 0 and perc_car <= 1
-        assert prob_point >= 0 and prob_point <= 1
+    def _add_on_circle_noise(self):
+        """ Generate a circle with radius self._radius and put the cars on it. """
+        # Get the needed variables
+        M,T = self.elem['obj_trajs_pos'].shape[:2]
 
-        # Do stuff
-        pass
+        # Loop over each batch
+        car_indices_modify = np.random.choice(M, int(M * self._prob_car), replace=False)
+        for car_index in car_indices_modify:
+            for point_index in range(T-1):
+                # Randomly decide whether to modify the point
+                if np.random.rand() > self._prob_aug:
+                    continue
+                # Generate a random angle and put the car on the circle
+                angle = np.random.rand() * 2 * np.pi
+                x = self.elem['obj_trajs_pos'][car_index, point_index, 0]
+                y = self.elem['obj_trajs_pos'][car_index, point_index, 1]
+                self.elem['obj_trajs_pos'][car_index, point_index, 0] = x + self._radius * np.cos(angle)
+                self.elem['obj_trajs_pos'][car_index, point_index, 1] = y + self._radius * np.sin(angle)
 
-    def _noisy_car(self,perc_car=0.5,prob_point=0.5):
-        """
-        TODO
+    def _add_in_circle_noise(self):
+        """ Generate a circle with radius self._radius and put the cars in it. """
+        # Get the needed variables
+        M,T = self.elem['obj_trajs_pos'].shape[:2]
 
-        Args:
-            perc_car (float): Percentage of the car to hide
-            prob_point (float): Probability of hiding a point in the car trajectory
-        """
+        # Randomly choose the cars to modify
+        car_indices_modify = np.random.choice(M, int(M * self._prob_car), replace=False)
+        for car_index in car_indices_modify:
+            for point_index in range(T-1):
+                # Randomly decide whether to modify the point
+                if np.random.rand() > self._prob_aug:
+                    continue
+                # Generate a random angle and radius and put the car in the circle
+                angle = np.random.rand() * 2 * np.pi
+                radius = np.random.rand() * self._radius
+                x = self.elem['obj_trajs_pos'][car_index, point_index, 0]
+                y = self.elem['obj_trajs_pos'][car_index, point_index, 1]
+                self.elem['obj_trajs_pos'][car_index, point_index, 0] = x + radius * np.cos(angle)
+                self.elem['obj_trajs_pos'][car_index, point_index, 1] = y + radius * np.sin(angle)
+         
+    def _hide_car(self):
+        """Hide a random percentage of cars in the batch."""
 
-        def _on_circle(radius, center):
-            # Move the center to the circle
-            pass
-        def _in_circle(radius, center):
-            # Move the center inside the circle
-            pass
+        # Get the needed variables
+        M,T = self.elem['obj_trajs_pos'].shape[:2]  # Get the batch size, number of cars, and number of points in the trajectory
 
-        # Validate the input data
-        assert perc_car >= 0 and perc_car <= 1
-        assert prob_point >= 0 and prob_point <= 1
+        # Calculate the number of cars to hide
+        num_cars_to_hide = int(M * self._prob_car)
+        if num_cars_to_hide == 0:
+            return
 
-        # Do stuff
-        pass
+        # Get the object trajectories and masks from the batch dictionary
+        car_indices_to_hide = np.random.choice(M, num_cars_to_hide, replace=False) # Randomly choose the cars to hide
+        for car_index in car_indices_to_hide: # Loop over each car to hide
+            for point_index in range(T-1):  # Loop over each point in the trajectory
+                if np.random.rand() < self._prob_aug: # Randomly decide whether to hide the point
+                    self.elem['obj_trajs_mask'][car_index, point_index] = 0 # Set the mask to zero --> this point won't be used
 
-    def collate_fn(self, data_list):
-        # Call the collate_fn of the base class
-        batch_dict = super().collate_fn(data_list)
+    def __getitem__(self, index):
+        # Get the element from the parent class
+        self.elem = super().__getitem__(index)[0]
 
-        # Optimize
-        for i in range(32):
-            input_dict = batch_dict['input_dict']
-            obj_traj_mask = input_dict['obj_trajs_mask'][i,:,-1]
-            obj_trajs_pos = input_dict['obj_trajs_pos'][i,:,-1]
-            obj_trajs_last_pos = input_dict['obj_trajs_last_pos'][i,:]
-            # If any of the obj_traj_mask is 0
-            if False in obj_traj_mask:
-                for j in range(len(obj_traj_mask)):
-                    print(obj_traj_mask[j], obj_trajs_pos[j], obj_trajs_last_pos[j])
-                breakpoint()
+        # Don't modify the element if it is a validation element
+        if self.is_validation:
+            return [self.elem]
 
-        # Do data augmentation on batch_dict
-        if self.is_validation == False:
-            # TODO: Prepare the data
+        # Modify the element if it is a training element
+        if self.aug_mode == 'on_circle':
+            self._add_on_circle_noise()
+        elif self.aug_mode == 'in_circle':
+            self._add_in_circle_noise()
+        elif self.aug_mode == 'hide_car':
             self._hide_car()
-            self._noisy_car()
 
-        # Return the augmented batch_dict
-        return batch_dict
+        # Return the modified element
+        return [self.elem]
+
