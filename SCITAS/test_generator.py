@@ -1,6 +1,6 @@
 ## Parameters definition ##
 data = {
-    "seed": [37],
+    "seed": [37,46],
     "past_len": [21],
     "future_len": [60],
     "num_modes": [5],
@@ -254,8 +254,8 @@ prob_aug: {data['prob_aug']}
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("--experiments_folder_name", type=str, default=None)
-    args.add_argument("--config_name", type=str, default=None)
-    args.add_argument("--method_name", type=str, default=None)    
+    args.add_argument("--experiments_folder_name", type=str, default=None,required=True)
+    args.add_argument("--config_name", type=str, default=None,required=True)
+    args.add_argument("--method_name", type=str, default=None,required=True)
     args = args.parse_args()
     main(args.experiments_folder_name, args.config_name, args.method_name)
