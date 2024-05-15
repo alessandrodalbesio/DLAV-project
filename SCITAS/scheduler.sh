@@ -16,6 +16,9 @@ source /home/$username/DLAV-project/.venv/bin/activate
 sched_config="/home/$username/DLAV-project/SCITAS/$experiments_folder_name"
 dest_dir="/home/$username/DLAV-project/motionnet/configs"
 
+# Delete the scheduler config directory
+rm -rf $sched_config
+
 # Run the test generator script
 python /home/$username/DLAV-project/SCITAS/test_generator.py --experiments_folder_name $experiments_folder_name --method_name $name_method_file --config_name $name_config_file
 

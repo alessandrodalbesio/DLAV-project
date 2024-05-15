@@ -1,22 +1,40 @@
 ## Parameters definition ##
 data = {
-  "seed": [37],
-  "past_len": [21],
-  "future_len": [60],
-  "num_modes": [6],
-  "hidden_size": [128],
-  "num_encoder_layers": [2],
-  "num_decoder_layers": [4],
-  "tx_hidden_size": [384],
-  "tx_num_heads": [16],
-  "dropout": [0.1],
-  "max_epochs": [100],
-  "learning_rate": [0.0005],
-  "learning_rate_scheduler": [[15, 25, 45, 55, 65, 75]],
-  "train_batch_size": [256]
+    "seed": [37],
+    "past_len": [21],
+    "future_len": [60],
+    "num_modes": [5],
+    "hidden_size": [128],
+    "num_encoder_layers": [2],
+    "num_decoder_layers": [4],
+    "tx_hidden_size": [384],
+    "tx_num_heads": [16],
+    "dropout": [0.1],
+    "max_epochs": [100],
+    "learning_rate": [0.0005],
+    "learning_rate_scheduler": [[15, 25, 45, 55, 65, 75]],
+    "train_batch_size": [256],
+    "entropy_weight": [40.0],
+    "aug_mode": ["none"],
+    "radius": [0.0],
+    "prob_car": [0.0],
+    "prob_aug": [0.0]
 }
+# Attention: The file will generate a combination of all the different possibilities.
+# For example if you have seed: [1, 2] and past_len: [1, 2], the file will generate 4 experiments:
+# seed: 1, past_len: 1
+# seed: 1, past_len: 2
+# seed: 2, past_len: 1
+# seed: 2, past_len: 2
+# Be wise when you define the parameters :)
 
-name = "num_dec_layers=4,ep=100"
+def callback(data):
+    # Define the name rule for the experiments (to see it on SCITAS). data contains the parameters of the experiment.
+    name = f"test_modes_{data['num_modes']}"
+
+    # Return the name
+    return name
+
 ########################################################################################
 
 ## Import the libraries ##
@@ -33,6 +51,10 @@ def main(experiments_folder_name, config_name, method_name):
         user = os.environ['USER']
     except KeyError:
         user = os.environ['USERNAME']
+
+    # Delete the experiment folder
+    if os.path.exists(experiments_folder_name):
+        os.system(f"rm -rf {experiments_folder_name}")
 
     # Load the parameters
     save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), experiments_folder_name)
@@ -54,8 +76,11 @@ def main(experiments_folder_name, config_name, method_name):
         for k in range(len(keys)):
             data_exp[keys[k]] = data[keys[k]][i[k]]    
     
+        # Define the name format        
+        name = callback(data_exp) if callback is not None else None
+
         # Get the configuration files
-        exp_name = f"{name}_{exp_num}" if name is not None else f"exp_{i}"
+        exp_name = f"{name}" if name is not None else f"exp_{i}"
         config, ptr = get_config_files(user, exp_name, data_exp)
 
         # Create the directory
@@ -194,7 +219,7 @@ num_decoder_layers: {data['num_decoder_layers']}
 tx_hidden_size: {data['tx_hidden_size']}
 tx_num_heads: {data['tx_num_heads']}
 dropout: {data['dropout']}
-entropy_weight: 40.0
+entropy_weight: {data['entropy_weight']}
 kl_weight: 20.0
 use_FDEADE_aux_loss: True
 
@@ -218,6 +243,12 @@ manually_split_lane: False
 point_sampled_interval: 1
 num_points_each_polyline: 20
 vector_break_dist_thresh: 1.0
+
+# Set the parameters regarding the standard deviation of the trajectory noise
+aug_mode: {data['aug_mode']}
+radius: {data['radius']}
+prob_car: {data['prob_car']}
+prob_aug: {data['prob_aug']}
             """
     return config, ptr
 
