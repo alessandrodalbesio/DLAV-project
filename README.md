@@ -56,7 +56,7 @@ wandb login
 This Python script defines a neural network model specifically designed for predicting future trajectories of agents in a dynamic environment, using a combination of convolutional and transformer-based architectures to process both image-based and point-based map data. It utilizes attention mechanisms to integrate social and temporal contexts, predicting multiple possible future paths by generating trajectory distributions, and calculates associated probabilities for each predicted mode.
 ### `ptr.yaml`
 This YAML file contains the default configuration settings for the neural network model, including the number of input channels, hidden dimensions, number of transformer layers, dropout rate, and other architectural parameters. It also specifies the hyperparameters for training, such as the learning rate, batch size, and number of epochs. <br>
-From this file you can also set the data augmentation mode desired (see ptr_dataset.py). In particular you can choose between On Circle ("on_circle"), In Circle ("in_circle"), Hide Car ("hide_car") and Fixed Variance Noise ("fixed variance"). You can also select no augmentation ("None").
+From this file you can also set the data augmentation mode desired (see <a href="ptr_dataset.py">ptr_dataset.py</a> ) . In particular you can choose between On Circle ("on_circle"), In Circle ("in_circle"), Hide Car ("hide_car"). You can also select no augmentation ("None").
 ### `config.yaml`
 This YAML file contains the default configuration settings for the training script. It also specifies the paths to the training and validation datasets, the directory for saving model checkpoints, and the number of GPUs to use for training. <br>
 Here you can also define your optimizer and your scheduler. Currently we support the followings: 
@@ -68,7 +68,6 @@ Other optimizers or schedulers can be added in the config.yaml file.
 This Python script creates a specific dataset for the ptr model. Using the __get_item__ method we implemented varous data augmentation possibilities. In particular you can choose the desider augmentation mode from the ptr.yaml file.
 - On Circle augmentation. For a certain percentage of cars some points in the trajectory are moved by a fixed radius distance from their original point with a certain probability. Radius is defined in ptr.yaml
 - In Circle augmentation. For a certain percentage of cars some points in the trajectory are moved by at maximum a fixed radius distance from their original point with a certain probability. Radius is defined in ptr.yaml
-- Fixed Variance Noise augmentation. For a certain percentage of cars some points' coordinates x and y in the trajectory are moved by a quantity gaussianly distributed with fixed variance. 
 - Hide Cars augmentation. A certain percentage of points in the cars' trajectories are hidden.
 ### `train.py`
 This Python script uses PyTorch Lightning and Hydra to set up and execute the training of a machine learning model, with configurations loaded and managed dynamically via Hydra from a specified directory. It prepares the training and validation datasets, utilizes data loaders with custom batch sizes, and sets up a training loop with model checkpoints based on validation performance, supporting both local and distributed training environments depending on the configuration.
