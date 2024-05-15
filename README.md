@@ -59,7 +59,12 @@ This YAML file contains the default configuration settings for the neural networ
 ### `train.py`
 This Python script uses PyTorch Lightning and Hydra to set up and execute the training of a machine learning model, with configurations loaded and managed dynamically via Hydra from a specified directory. It prepares the training and validation datasets, utilizes data loaders with custom batch sizes, and sets up a training loop with model checkpoints based on validation performance, supporting both local and distributed training environments depending on the configuration.
 ### `config.yaml`
-This YAML file contains the default configuration settings for the training script. It also specifies the paths to the training and validation datasets, the directory for saving model checkpoints, and the number of GPUs to use for training.
+This YAML file contains the default configuration settings for the training script. It also specifies the paths to the training and validation datasets, the directory for saving model checkpoints, and the number of GPUs to use for training. <br>
+Here you can also define your optimizer and your scheduler. Currently we support the followings: 
+- Optimizer: Adam ("adam"), AdamW ("adamw"), SGD ("sgd") ;
+- Scheduler: Multistep ("multistep"), Plateau ("plateau").
+Other optimizers or schedulers can be added in the config.yaml file.
+
 ### `test_generator.py`
 This file can be used to generate multiple configuration files for different hyperparameters. It is particularly useful to automate a grid search process.
 ### `scheduler.sh`
