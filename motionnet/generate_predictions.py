@@ -30,6 +30,16 @@ def generate_predictions(cfg):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Create the folder "submissions if it does not exist"
+    os.makedirs("submissions", exist_ok=True)
+    exp_name = cfg.ckpt_path.split("/")[-4]
+    exp_folder_name = f"submissions/{exp_name}"
+    if os.path.exists(exp_folder_name) is False:
+        os.makedirs(exp_folder_name)
+    else:
+        raise ValueError("A submission with this name already exists. Please change the name of the experiment in the config file.")
+
+
     # Load the model
     model = build_model(cfg)
     model.load_state_dict(torch.load(cfg.ckpt_path)["state_dict"])
@@ -40,7 +50,7 @@ def generate_predictions(cfg):
     test_dataset = build_dataset(cfg,val=True)
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, collate_fn=test_dataset.collate_fn)  # Batch size can be adjusted
 
-    os.makedirs("visualizations", exist_ok=True)
+    os.makedirs(f"{exp_folder_name}/visualizations", exist_ok=True)
     predictions = []
     # Generate predictions
     with torch.no_grad():
@@ -63,11 +73,11 @@ def generate_predictions(cfg):
 
             # draw visualizations
             plt = visualize_prediction(batch, output)
-            plt.savefig(f"visualizations/visualization_{i}.png")
+            plt.savefig(f"{exp_folder_name}/visualizations/visualization_{i}.png")
             plt.close()
 
     # Save predictions to a csv file for submission
-    with open("submission.csv", mode='w', newline='') as file:
+    with open(f"{exp_folder_name}/{exp_name}.csv", mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Pred_ID', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4', 'x5', 'y5', 'x6', 'y6'])
         for i, pred in enumerate(predictions):

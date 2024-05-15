@@ -1,9 +1,9 @@
 # common
 model_name: ptr
-num_modes: 6
+num_modes: 5
 hidden_size: 128
 num_encoder_layers: 2
-num_decoder_layers: 2
+num_decoder_layers: 4
 tx_hidden_size: 384
 tx_num_heads: 16
 dropout: 0.1
@@ -12,14 +12,20 @@ kl_weight: 20.0
 use_FDEADE_aux_loss: True
 
 # train
-max_epochs: 60
-learning_rate: 0.00025
-learning_rate_sched: [25,50]
-optimizer: Adam 
-scheduler: multistep 
+max_epochs: 100
+learning_rate: 0.0005
+# Define your optimizer (adam, sgd, adamw)
+optimizer: Adam
+# Define your scheduler (multistep, plateau)
+scheduler: multistep
+# If scheduler is multistep, define the learning rate schedule
+learning_rate_sched: [15, 25, 45, 55, 65, 75]
+# If scheduler is plateau, define the monitor metric
+# monitor_metric: val_loss
+
 ewc_lambda: 2000
-train_batch_size: 128 
-eval_batch_size: 256 
+train_batch_size: 256
+eval_batch_size: 256
 grad_clip_norm: 5
 
 # data related
@@ -32,5 +38,8 @@ point_sampled_interval: 1
 num_points_each_polyline: 20
 vector_break_dist_thresh: 1.0
 
-
-
+# Set the parameters regarding the standard deviation of the trajectory noise
+aug_mode: 'on_circle'
+radius: 0.01 # Needed if aug_mode is 'on_circle' or 'in_circle'
+prob_car: 0.5 # Needed if aug_mode is not 'none'
+prob_aug: 0.25 # Needed if aug_mode is not 'none'

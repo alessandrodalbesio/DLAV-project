@@ -10,7 +10,7 @@ from utils.utils import set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint  # Import ModelCheckpoint
 import hydra
 from omegaconf import DictConfig, OmegaConf
-import os
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def train(cfg):
@@ -19,10 +19,8 @@ def train(cfg):
     OmegaConf.set_struct(cfg, False)  # Open the struct
     cfg = OmegaConf.merge(cfg, cfg.method)
 
-    # Build the model
     model = build_model(cfg)
 
-    # Build the dataset
     train_set = build_dataset(cfg)
     val_set = build_dataset(cfg,val=True)
 
@@ -32,8 +30,8 @@ def train(cfg):
     call_backs = []
 
     checkpoint_callback = ModelCheckpoint(
-        monitor='val/brier_fde',    # Replace with your validation metric
-        filename='{epoch}-{val/brier_fde:.2f}',
+        monitor='val/minADE6',    # Replace with your validation metric
+        filename='{epoch}-{val/min_ade:.2f}',
         save_top_k=1,
         mode='min',            # 'min' for loss/error, 'max' for accuracy
     )
@@ -41,12 +39,21 @@ def train(cfg):
     call_backs.append(checkpoint_callback)
 
     train_loader = DataLoader(
-        train_set, batch_size=train_batch_size, num_workers=cfg.load_num_workers, drop_last=False,
-    collate_fn=train_set.collate_fn)
+        train_set, 
+        batch_size=train_batch_size, 
+        num_workers=cfg.load_num_workers, 
+        drop_last=False,
+        collate_fn=train_set.collate_fn
+    )
 
     val_loader = DataLoader(
-        val_set, batch_size=eval_batch_size, num_workers=cfg.load_num_workers, shuffle=False, drop_last=False,
-    collate_fn=train_set.collate_fn)
+        val_set, 
+        batch_size=eval_batch_size, 
+        num_workers=cfg.load_num_workers, 
+        shuffle=False, 
+        drop_last=False,
+        collate_fn=train_set.collate_fn
+    )
 
     trainer = pl.Trainer(
         max_epochs=cfg.method.max_epochs,

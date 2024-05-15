@@ -6,7 +6,7 @@ name_method_file="ptr"
 name_config_file="config"
 
 # Get the username
-username=whoami 
+username=$(whoami)
 echo "Running the scheduler script as user: $username"
 
 # Activate the virtual environment
@@ -16,8 +16,11 @@ source /home/$username/DLAV-project/.venv/bin/activate
 sched_config="/home/$username/DLAV-project/SCITAS/$experiments_folder_name"
 dest_dir="/home/$username/DLAV-project/motionnet/configs"
 
+# Delete the scheduler config directory
+rm -rf $sched_config
+
 # Run the test generator script
-python /home/$username/DLAV-project/SCITAS/test_generator.py --experiments_folder_name $experiments_folder_name --name_method_file $name_method_file --name_config_file $name_config_file
+python /home/$username/DLAV-project/SCITAS/test_generator.py --experiments_folder_name $experiments_folder_name --method_name $name_method_file --config_name $name_config_file
 
 # Move to the main directory
 cd /home/$username/DLAV-project/motionnet
@@ -34,7 +37,7 @@ if [ -d "$sched_config" ]; then
             echo "Copied config files to the main directory"
 
             # Run the experiment
-            # python train.py method=ptr
+            python train.py method=ptr
         fi
     done
 else

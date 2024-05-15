@@ -178,4 +178,10 @@ cython_debug/
 motionnet/motionnet/
 
 # Ignore the submission file
-submission.csv
+motionnet/submissions/
+
+# Ignore the logs
+SCITAS/logs/
+
+# Ignore the experiments folder
+SCITAS/experiments/

@@ -1,18 +1,17 @@
 # exp setting
-exp_name: 'test'
+exp_name: 'test_modes_5'
 ckpt_path: Null
-seed: 42
-debug: False
+seed: 37
+debug: True
 devices: [0]
 
 # data related
 load_num_workers: 0
-persistent_workers: False
-train_data_path: ["../.datasets/train"]
-val_data_path: ["../.datasets/val"]
+train_data_path: ['../.datasets/train']
+val_data_path: ['../.datasets/val']
 max_data_num: [1000000]
-past_len: 21 # 0.1s
-future_len: 60 # 0.1s
+past_len: 21 # 2.1 s
+future_len: 60 # 6 s
 object_type: ['VEHICLE'] #, 'PEDESTRIAN', 'CYCLIST']
 line_type: ['lane','stop_sign','road_edge','road_line','crosswalk','speed_bump'] #['lane','stop_sign','road_edge','road_line','crosswalk','speed_bump']
 masked_attributes: ['z_axis, size'] # 'z_axis, size, velocity, acceleration, heading'
@@ -29,4 +28,5 @@ eval_nuscenes: False
 eval_waymo: False
 
 defaults:
-  - method: ptr
+- method: ptr
+            
