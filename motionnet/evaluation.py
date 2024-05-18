@@ -26,13 +26,8 @@ def evaluation(cfg):
     eval_batch_size = max(cfg.method['eval_batch_size'] // len(cfg.devices) // val_set.data_chunk_size,1)
 
     val_loader = DataLoader(
-        val_set, 
-        batch_size=eval_batch_size, 
-        num_workers=cfg.load_num_workers, 
-        shuffle=False, 
-        drop_last=False,
-        collate_fn=val_set.collate_fn
-    )
+        val_set, batch_size=eval_batch_size, num_workers=cfg.load_num_workers, shuffle=False, drop_last=False,
+    collate_fn=val_set.collate_fn)
 
     trainer = pl.Trainer(
         inference_mode=True,
@@ -42,11 +37,7 @@ def evaluation(cfg):
         profiler="simple",
     )
 
-    trainer.validate(
-        model=model, 
-        dataloaders=val_loader,
-        ckpt_path=cfg.ckpt_path
-    )
+    trainer.validate(model=model, dataloaders=val_loader,ckpt_path=cfg.ckpt_path)
 
 
 if __name__ == '__main__':

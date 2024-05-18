@@ -48,12 +48,7 @@ def generate_predictions(cfg):
 
     # Load the test dataset
     test_dataset = build_dataset(cfg,val=True)
-    test_loader = DataLoader(
-        test_dataset, 
-        batch_size=128, 
-        shuffle=False, 
-        collate_fn=test_dataset.collate_fn
-    )  # Batch size can be adjusted
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, collate_fn=test_dataset.collate_fn)  # Batch size can be adjusted
 
     os.makedirs(f"{exp_folder_name}/visualizations", exist_ok=True)
     predictions = []

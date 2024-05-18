@@ -1,9 +1,7 @@
 from motionnet.models.ptr.ptr import PTR
-from motionnet.models.qcnet.qcnet import QCNet
 
 __all__ = {
     'ptr': PTR,
-    'qcnet': QCNet
 }
 
 
