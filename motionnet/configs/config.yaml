@@ -28,5 +28,5 @@ eval_nuscenes: False
 eval_waymo: False
 
 defaults:
-- method: ptr
+- method: qcnet
             
