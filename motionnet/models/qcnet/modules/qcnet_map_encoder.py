@@ -15,7 +15,7 @@ from typing import Dict
 
 import torch
 import torch.nn as nn
-from torch_cluster import radius_graph
+from motionnet.models.qcnet.utils.radius import radius_graph
 from torch_geometric.data import Batch
 from torch_geometric.data import HeteroData
 
