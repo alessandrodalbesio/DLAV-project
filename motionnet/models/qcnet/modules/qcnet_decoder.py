@@ -142,8 +142,8 @@ class QCNetDecoder(nn.Module):
                 data: HeteroData,
                 scene_enc: Mapping[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         pos_m = data['agent']['position'][:, self.num_historical_steps - 1, :self.input_dim]
-        head_m = data['agent']['heading'][:, self.num_historical_steps - 1]
-        head_vector_m = torch.stack([head_m.cos(), head_m.sin()], dim=-1)
+        head_m = data['agent']['heading'][:, self.num_historical_steps - 1].squeeze()
+        head_vector_m = torch.stack([head_m.cos(), head_m.sin()], dim=-1).squeeze()
 
         x_t = scene_enc['x_a'].reshape(-1, self.hidden_dim)
         x_pl = scene_enc['x_pl'][:, self.num_historical_steps - 1].repeat(self.num_modes, 1)
@@ -155,15 +155,16 @@ class QCNetDecoder(nn.Module):
         mask_dst = data['agent']['predict_mask'].any(dim=-1, keepdim=True).repeat(1, self.num_modes)
 
         pos_t = data['agent']['position'][:, :self.num_historical_steps, :self.input_dim].reshape(-1, self.input_dim)
-        head_t = data['agent']['heading'][:, :self.num_historical_steps].reshape(-1)
+        head_t = data['agent']['heading'][:, :self.num_historical_steps].reshape(-1).squeeze()
         edge_index_t2m = bipartite_dense_to_sparse(mask_src.unsqueeze(2) & mask_dst[:, -1:].unsqueeze(1))
         rel_pos_t2m = pos_t[edge_index_t2m[0]] - pos_m[edge_index_t2m[1]]
         rel_head_t2m = wrap_angle(head_t[edge_index_t2m[0]] - head_m[edge_index_t2m[1]])
         r_t2m = torch.stack(
             [torch.norm(rel_pos_t2m[:, :2], p=2, dim=-1),
-             angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_t2m[1]], nbr_vector=rel_pos_t2m[:, :2]),
+             angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_t2m[1]].squeeze(), nbr_vector=rel_pos_t2m[:, :2].squeeze()),
              rel_head_t2m,
              (edge_index_t2m[0] % self.num_historical_steps) - self.num_historical_steps + 1], dim=-1)
+        breakpoint()
         r_t2m = self.r_t2m_emb(continuous_inputs=r_t2m, categorical_embs=None)
         edge_index_t2m = bipartite_dense_to_sparse(mask_src.unsqueeze(2) & mask_dst.unsqueeze(1))
         r_t2m = r_t2m.repeat_interleave(repeats=self.num_modes, dim=0)

@@ -51,7 +51,7 @@ class QCNetDataset(BaseDataset):
         past_len = self.config['past_len']
         future_len = self.config['future_len']
         tot_time_len = past_len + future_len
-        
+
         # Get the position, the heading and the velocity of the agents
         idx = torch.tensor(range(num_agents), dtype=torch.int) # Index of the agents
         agent_type = torch.zeros(num_agents, 5, dtype=torch.int) # Type of the agents
@@ -63,7 +63,6 @@ class QCNetDataset(BaseDataset):
 
         for i in range(num_agents):
             # Set the agent type
-            #agent_type[i] = torch.tensor(np.argmax(elem['obj_trajs'][i,0,6:11]), dtype=torch.int)
             agent_type[i, :] = torch.tensor(elem['obj_trajs'][i,0,6:11], dtype=torch.int)
 
             # Set the past position, velocity and heading
@@ -111,6 +110,7 @@ class QCNetDataset(BaseDataset):
         map_data['map_point'] = {'position': torch.tensor([]), 'orientation': torch.tensor([]), 'type': torch.tensor([]), 'height': torch.tensor([]), 'magnitude': torch.tensor([])}
         map_data[('map_point','to','map_polygon')] = {'edge_index': torch.tensor([], dtype=torch.long)}
         counter = 0
+        counter_bis = 0
 
         # Create the map data: "map_point" and ("map_point", "to", "map_polygon")
         for i in range(elem['map_polylines'].shape[0]):
@@ -124,9 +124,9 @@ class QCNetDataset(BaseDataset):
                     magnitude = np.linalg.norm(valid_points[j][0:2]-valid_points[0][0:2])
                     map_data['map_point']['magnitude'] = torch.cat((map_data['map_point']['magnitude'], torch.tensor([magnitude], dtype=torch.float)))
                     # [('map_point','to','map_polygon')]['edge_index'] has first element equal to point index and second to polygon index
-                    map_data[('map_point','to','map_polygon')]['edge_index'] = torch.cat((map_data[('map_point','to','map_polygon')]['edge_index'], torch.tensor([counter+j, counter], dtype=torch.long)))
-                counter += len(valid_points)
-
+                    map_data[('map_point','to','map_polygon')]['edge_index'] = torch.cat((map_data[('map_point','to','map_polygon')]['edge_index'], torch.tensor([counter, counter_bis], dtype=torch.long)))
+                    counter += 1
+                counter_bis += 1
         map_data['map_point']['num_nodes'] = counter
         map_data['map_point']['position'] = map_data['map_point']['position'].reshape(-1,2)
         map_data[('map_point','to','map_polygon')]['edge_index'] = map_data[('map_point','to','map_polygon')]['edge_index'].reshape(-1,2).transpose(0,1)

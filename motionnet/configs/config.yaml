@@ -29,4 +29,3 @@ eval_waymo: False
 
 defaults:
 - method: qcnet
-            

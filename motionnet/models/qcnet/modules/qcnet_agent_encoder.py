@@ -58,18 +58,13 @@ class QCNetAgentEncoder(nn.Module):
         self.head_dim = head_dim
         self.dropout = dropout
 
-        if dataset == 'argoverse_v2':
-            input_dim_x_a = 4
-            input_dim_r_t = 4
-            input_dim_r_pl2a = 3
-            input_dim_r_a2a = 3
-        else:
-            raise ValueError('{} is not a valid dataset'.format(dataset))
+        input_dim_x_a = 4
+        input_dim_r_t = 4
+        input_dim_r_pl2a = 3
+        input_dim_r_a2a = 3
 
-        if dataset == 'argoverse_v2':
-            self.type_a_emb = nn.Embedding(10, hidden_dim)
-        else:
-            raise ValueError('{} is not a valid dataset'.format(dataset))
+        self.type_a_emb = nn.Embedding(10, hidden_dim)
+
         self.x_a_emb = FourierEmbedding(input_dim=input_dim_x_a, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
         self.r_t_emb = FourierEmbedding(input_dim=input_dim_r_t, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
         self.r_pl2a_emb = FourierEmbedding(input_dim=input_dim_r_pl2a, hidden_dim=hidden_dim,
@@ -101,29 +96,22 @@ class QCNetAgentEncoder(nn.Module):
         head_vector_a = torch.stack([head_a.cos(), head_a.sin()], dim=-1)
         pos_pl = data['map_polygon']['position'][:, :self.input_dim].contiguous()
         orient_pl = data['map_polygon']['orientation'].contiguous()
-        if self.dataset == 'argoverse_v2':
-            vel = data['agent']['velocity'][:, :self.num_historical_steps, :self.input_dim].contiguous()
-            length = width = height = None
-            categorical_embs = [
-                self.type_a_emb(data['agent']['type'].long()).repeat_interleave(repeats=self.num_historical_steps,
-                                                                                dim=0),
-            ]
-        else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
 
-        if self.dataset == 'argoverse_v2':
-            breakpoint()
+        vel = data['agent']['velocity'][:, :self.num_historical_steps, :self.input_dim].contiguous()
+        length = width = height = None
+        categorical_embs = [
+            self.type_a_emb(data['agent']['type'].long()).repeat_interleave(repeats=self.num_historical_steps,
+                                                                            dim=0),
+        ]
 
-            x_a = torch.stack(
-                [torch.norm(motion_vector_a[:, :, :2], p=2, dim=-1),
-                 
-                 angle_between_2d_vectors(ctr_vector=head_vector_a, nbr_vector=motion_vector_a[:, :, :2]),
-                 torch.norm(vel[:, :, :2], p=2, dim=-1),
-                 angle_between_2d_vectors(ctr_vector=head_vector_a, nbr_vector=vel[:, :, :2])], dim=-1)
-        else:
-            raise ValueError('{} is not a valid dataset'.format(self.dataset))
-        x_a = self.x_a_emb(x_a) #continuous_inputs=x_a.view(-1, x_a.size(-1)), categorical_embs=categorical_embs)
-        x_a = x_a.view(-1) #, self.num_historical_steps, self.hidden_dim)
+        x_a = torch.stack(
+            [torch.norm(motion_vector_a[:, :, :2], p=2, dim=-1),
+                angle_between_2d_vectors(ctr_vector=head_vector_a, nbr_vector=motion_vector_a[:, :, :2]),
+                torch.norm(vel[:, :, :2], p=2, dim=-1),
+                angle_between_2d_vectors(ctr_vector=head_vector_a, nbr_vector=vel[:, :, :2])], dim=-1)
+
+        x_a = self.x_a_emb(continuous_inputs=x_a.view(-1, x_a.size(-1)))
+        x_a = x_a.view(-1, self.num_historical_steps, self.hidden_dim)
 
         pos_t = pos_a.reshape(-1, self.input_dim)
         head_t = head_a.reshape(-1)
