@@ -164,7 +164,6 @@ class QCNetDecoder(nn.Module):
              angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_t2m[1]].squeeze(), nbr_vector=rel_pos_t2m[:, :2].squeeze()),
              rel_head_t2m,
              (edge_index_t2m[0] % self.num_historical_steps) - self.num_historical_steps + 1], dim=-1)
-        breakpoint()
         r_t2m = self.r_t2m_emb(continuous_inputs=r_t2m, categorical_embs=None)
         edge_index_t2m = bipartite_dense_to_sparse(mask_src.unsqueeze(2) & mask_dst.unsqueeze(1))
         r_t2m = r_t2m.repeat_interleave(repeats=self.num_modes, dim=0)

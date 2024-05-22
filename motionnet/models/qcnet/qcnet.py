@@ -124,7 +124,61 @@ class QCNet(BaseModel):
         # this does not work: data = HeteroData(data)
         scene_enc = self.encoder(data)
         pred = self.decoder(data, scene_enc)
-        return pred
+
+        reg_mask = data['agent']['predict_mask'][:, self.num_historical_steps:]
+        cls_mask = data['agent']['predict_mask'][:, -1]
+
+        if self.output_head:
+            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
+                                      pred['loc_propose_head'],
+                                      pred['scale_propose_pos'][..., :self.output_dim],
+                                      pred['conc_propose_head']], dim=-1)
+            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
+                                     pred['loc_refine_head'],
+                                     pred['scale_refine_pos'][..., :self.output_dim],
+                                     pred['conc_refine_head']], dim=-1)
+        else:
+            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
+                                      pred['scale_propose_pos'][..., :self.output_dim]], dim=-1)
+            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
+                                     pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
+        pi = pred['pi']
+        gt = torch.cat([data['agent']['target'][..., :self.output_dim], data['agent']['target'][..., -1:]], dim=-1)
+        l2_norm = (torch.norm(traj_propose[..., :self.output_dim] -
+                              gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
+        best_mode = l2_norm.argmin(dim=-1)
+        traj_propose_best = traj_propose[torch.arange(traj_propose.size(0)), best_mode]
+        traj_refine_best = traj_refine[torch.arange(traj_refine.size(0)), best_mode]
+        reg_loss_propose = self.reg_loss(traj_propose_best,
+                                         gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_propose = reg_loss_propose.mean()
+        reg_loss_refine = self.reg_loss(traj_refine_best,
+                                        gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_refine = reg_loss_refine.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_refine = reg_loss_refine.mean()
+        cls_loss = self.cls_loss(pred=traj_refine[:, :, -1:].detach(),
+                                 target=gt[:, -1:, :self.output_dim + self.output_head],
+                                 prob=pi,
+                                 mask=reg_mask[:, -1:]) * cls_mask
+        cls_loss = cls_loss.sum() / cls_mask.sum().clamp_(min=1)
+        self.log('train_reg_loss_propose', reg_loss_propose, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
+        self.log('train_reg_loss_refine', reg_loss_refine, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
+        self.log('train_cls_loss', cls_loss, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
+        loss = reg_loss_propose + reg_loss_refine + cls_loss
+        # breakpoint()
+
+        # pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
+        #                                 Bivariate Gaussian distribution.
+        # mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
+        
+        output = dict()
+
+        output['predicted_trajectory'] = pred['loc_refine_pos']
+        output['predicted_probability'] = pred['pi']
+        output['original'] = pred
+
+        return output, loss
 
 
     def configure_optimizers(self):
@@ -161,3 +215,90 @@ class QCNet(BaseModel):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.lr, weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.T_max, eta_min=0.0)
         return [optimizer], [scheduler]
+
+    def log_info(self, batch, prediction, status='train'): 
+
+        data = batch
+        pred = prediction['original']
+
+        if isinstance(data, Batch):
+            data['agent']['av_index'] += data['agent']['ptr'][:-1]
+        reg_mask = data['agent']['predict_mask'][:, self.num_historical_steps:]
+        cls_mask = data['agent']['predict_mask'][:, -1]
+
+        if self.output_head:
+            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
+                                      pred['loc_propose_head'],
+                                      pred['scale_propose_pos'][..., :self.output_dim],
+                                      pred['conc_propose_head']], dim=-1)
+            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
+                                     pred['loc_refine_head'],
+                                     pred['scale_refine_pos'][..., :self.output_dim],
+                                     pred['conc_refine_head']], dim=-1)
+        else:
+            traj_propose = torch.cat([pred['loc_propose_pos'][..., :self.output_dim],
+                                      pred['scale_propose_pos'][..., :self.output_dim]], dim=-1)
+            traj_refine = torch.cat([pred['loc_refine_pos'][..., :self.output_dim],
+                                     pred['scale_refine_pos'][..., :self.output_dim]], dim=-1)
+        pi = pred['pi']
+        gt = torch.cat([data['agent']['target'][..., :self.output_dim], data['agent']['target'][..., -1:]], dim=-1)
+        l2_norm = (torch.norm(traj_propose[..., :self.output_dim] -
+                              gt[..., :self.output_dim].unsqueeze(1), p=2, dim=-1) * reg_mask.unsqueeze(1)).sum(dim=-1)
+        best_mode = l2_norm.argmin(dim=-1)
+        traj_propose_best = traj_propose[torch.arange(traj_propose.size(0)), best_mode]
+        traj_refine_best = traj_refine[torch.arange(traj_refine.size(0)), best_mode]
+        reg_loss_propose = self.reg_loss(traj_propose_best,
+                                         gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_propose = reg_loss_propose.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_propose = reg_loss_propose.mean()
+        reg_loss_refine = self.reg_loss(traj_refine_best,
+                                        gt[..., :self.output_dim + self.output_head]).sum(dim=-1) * reg_mask
+        reg_loss_refine = reg_loss_refine.sum(dim=0) / reg_mask.sum(dim=0).clamp_(min=1)
+        reg_loss_refine = reg_loss_refine.mean()
+        cls_loss = self.cls_loss(pred=traj_refine[:, :, -1:].detach(),
+                                 target=gt[:, -1:, :self.output_dim + self.output_head],
+                                 prob=pi,
+                                 mask=reg_mask[:, -1:]) * cls_mask
+        cls_loss = cls_loss.sum() / cls_mask.sum().clamp_(min=1)
+        self.log('val_reg_loss_propose', reg_loss_propose, prog_bar=True, on_step=False, on_epoch=True, batch_size=1,
+                 sync_dist=True)
+        self.log('val_reg_loss_refine', reg_loss_refine, prog_bar=True, on_step=False, on_epoch=True, batch_size=1,
+                 sync_dist=True)
+        self.log('val_cls_loss', cls_loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=1, sync_dist=True)
+
+
+        eval_mask = torch.zeros_like(torch.Tensor(gt.shape[0]), dtype=torch.bool)
+        eval_mask[0]  = True
+        # if self.dataset == 'argoverse_v2':
+        #     eval_mask = data['agent']['category'] == 3
+        # else:
+        #     raise ValueError('{} is not a valid dataset'.format(self.dataset))
+        valid_mask_eval = reg_mask[eval_mask]
+        traj_eval = traj_refine[eval_mask, :, :, :self.output_dim + self.output_head]
+        if not self.output_head:
+            traj_2d_with_start_pos_eval = torch.cat([traj_eval.new_zeros((traj_eval.size(0), self.num_modes, 1, 2)),
+                                                     traj_eval[..., :2]], dim=-2)
+            motion_vector_eval = traj_2d_with_start_pos_eval[:, :, 1:] - traj_2d_with_start_pos_eval[:, :, :-1]
+            head_eval = torch.atan2(motion_vector_eval[..., 1], motion_vector_eval[..., 0])
+            traj_eval = torch.cat([traj_eval, head_eval.unsqueeze(-1)], dim=-1)
+        pi_eval = F.softmax(pi[eval_mask], dim=-1)
+        gt_eval = gt[eval_mask]
+
+        self.Brier.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
+                          valid_mask=valid_mask_eval)
+        self.minADE.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
+                           valid_mask=valid_mask_eval)
+        self.minAHE.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
+        self.minFDE.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
+                           valid_mask=valid_mask_eval)
+        self.minFHE.update(pred=traj_eval, target=gt_eval, prob=pi_eval, valid_mask=valid_mask_eval)
+        self.MR.update(pred=traj_eval[..., :self.output_dim], target=gt_eval[..., :self.output_dim], prob=pi_eval,
+                       valid_mask=valid_mask_eval)
+
+        self.log('val_Brier', self.Brier, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_minADE', self.minADE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_minAHE', self.minAHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_minFDE', self.minFDE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_minFHE', self.minFHE, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        self.log('val_MR', self.MR, prog_bar=True, on_step=False, on_epoch=True, batch_size=gt_eval.size(0))
+        return

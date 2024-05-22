@@ -1,6 +1,7 @@
 import torch
 from .base_dataset import BaseDataset
 from torch_geometric.data import HeteroData
+from motionnet.models.qcnet.utils import wrap_angle
 
 import numpy as np
 
@@ -8,6 +9,8 @@ class QCNetDataset(BaseDataset):
     def __init__(self, config=None, is_validation=False):
         super().__init__(config, is_validation)
         self.config = config
+        self.num_historical_steps = config['past_len']
+        self.num_future_steps = config['future_len']
 
     def collate_fn(self, data):
         # List containing the data of the modified batch
@@ -29,6 +32,42 @@ class QCNetDataset(BaseDataset):
             
             # Define the agent data
             elem_converted['agent'] = self._convert_agent_data(batch)
+
+            origin = elem_converted['agent']['position'][:, self.config.num_historical_steps - 1]
+            theta = elem_converted['agent']['heading'][:, self.config.num_historical_steps - 1].squeeze()
+            cos, sin = theta.cos(), theta.sin()
+            rot_mat = theta.new_zeros(elem_converted['agent']['num_nodes'], 2, 2)
+            rot_mat[:, 0, 0] = cos
+            rot_mat[:, 0, 1] = -sin
+            rot_mat[:, 1, 0] = sin
+            rot_mat[:, 1, 1] = cos
+            elem_converted['agent']['target'] = origin.new_zeros(elem_converted['agent']['num_nodes'], self.num_future_steps, 4)
+            elem_converted['agent']['target'][..., :2] = torch.bmm(elem_converted['agent']['position'][:, self.config.num_historical_steps:, :2] -
+                                                        origin[:, :2].unsqueeze(1), rot_mat)
+            if elem_converted['agent']['position'].size(2) == 3:
+                elem_converted['agent']['target'][..., 2] = (elem_converted['agent']['position'][:, self.config.num_historical_steps:, 2] -
+                                                origin[:, 2].unsqueeze(-1))
+
+            elem_converted['agent']['target'][..., 3] = wrap_angle(elem_converted['agent']['heading'][:, self.config.num_historical_steps:].squeeze() -
+                                                        theta.unsqueeze(-1))
+
+            try:
+                elem_converted['center_gt_trajs']           = torch.from_numpy(np.stack(batch['center_gt_trajs'], axis=0))
+            except:
+                elem_converted['center_gt_trajs']           = batch['center_gt_trajs']
+            try:
+                elem_converted['center_gt_trajs_mask']     = torch.from_numpy(np.stack(batch['center_gt_trajs_mask'], axis=0))
+            except:
+                elem_converted['center_gt_trajs_mask']     = batch['center_gt_trajs_mask']
+            try:
+                elem_converted['center_gt_final_valid_idx'] = torch.from_numpy(np.stack(batch['center_gt_final_valid_idx'], axis=0))
+            except:
+                elem_converted['center_gt_final_valid_idx'] = batch['center_gt_final_valid_idx']
+            
+            try:
+                elem_converted['center_gt_trajs_src']       = torch.from_numpy(np.stack(batch['center_gt_trajs_src'], axis=0))
+            except:
+                elem_converted['center_gt_trajs_src']       = batch['center_gt_trajs_src']
 
             # Define the map data
             elem_converted.update(self._convert_map_data(batch))

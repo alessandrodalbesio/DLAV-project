@@ -9,7 +9,7 @@ input_dim: 2
 hidden_dim: 128
 output_dim: 2
 output_head: true
-num_historical_steps: 50
+num_historical_steps: 21
 num_future_steps: 60
 num_modes: 6
 num_recurrent_steps: 3
