@@ -6,6 +6,7 @@ from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from models import build_model
 from datasets import build_dataset
+from dataloader import build_dataloader
 from utils.utils import set_seed
 from pytorch_lightning.callbacks import ModelCheckpoint  # Import ModelCheckpoint
 import hydra
@@ -38,23 +39,11 @@ def train(cfg):
 
     call_backs.append(checkpoint_callback)
 
-    train_loader = DataLoader(
-        train_set, 
-        batch_size=train_batch_size, 
-        num_workers=cfg.load_num_workers, 
-        drop_last=False,
-        collate_fn=train_set.collate_fn
-    )
+    # Define the build dataloader function
+    train_loader = build_dataloader(train_set,train_batch_size,cfg)
+    val_loader = build_dataloader(val_set,eval_batch_size,cfg,shuffle=False)
 
-    val_loader = DataLoader(
-        val_set, 
-        batch_size=eval_batch_size, 
-        num_workers=cfg.load_num_workers, 
-        shuffle=False, 
-        drop_last=False,
-        collate_fn=train_set.collate_fn
-    )
-
+    # Define the trainer
     trainer = pl.Trainer(
         max_epochs=cfg.method.max_epochs,
         logger= None if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),

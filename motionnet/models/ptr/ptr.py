@@ -171,7 +171,6 @@ class PTR(BaseModel):
         self.k_attr = k_attr
         self.d_k = config['hidden_size']
         self.c = config['num_modes']
-        breakpoint()
         self.L_enc = config['num_encoder_layers']
         self.dropout = config['dropout']
         self.num_heads = config['tx_num_heads']

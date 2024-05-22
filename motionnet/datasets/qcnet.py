@@ -12,7 +12,67 @@ class QCNetDataset(BaseDataset):
         self.num_historical_steps = config['past_len']
         self.num_future_steps = config['future_len']
 
-    def collate_fn(self, data):
+    def prepare_data(self,data):
+        # Define the dictionary that will contain the converted data
+        elem_converted = dict()
+            
+        # Define the scenario_id
+        elem_converted['scenario_id'] = data['scenario_id']
+            
+        # Get the city name (use dataset name as city name for now)
+        elem_converted['city'] = data['dataset_name']
+            
+        # Define the agent data
+        elem_converted['agent'] = self._convert_agent_data(data)
+
+        origin = elem_converted['agent']['position'][:, self.config.num_historical_steps - 1]
+        theta = elem_converted['agent']['heading'][:, self.config.num_historical_steps - 1].squeeze()
+        cos, sin = theta.cos(), theta.sin()
+        rot_mat = theta.new_zeros(elem_converted['agent']['num_nodes'], 2, 2)
+        rot_mat[:, 0, 0] = cos
+        rot_mat[:, 0, 1] = -sin
+        rot_mat[:, 1, 0] = sin
+        rot_mat[:, 1, 1] = cos
+        elem_converted['agent']['target'] = origin.new_zeros(elem_converted['agent']['num_nodes'], self.num_future_steps, 4)
+        elem_converted['agent']['target'][..., :2] = torch.bmm(elem_converted['agent']['position'][:, self.config.num_historical_steps:, :2] -
+                                                        origin[:, :2].unsqueeze(1), rot_mat)
+        if elem_converted['agent']['position'].size(2) == 3:
+            elem_converted['agent']['target'][..., 2] = (elem_converted['agent']['position'][:, self.config.num_historical_steps:, 2] -
+                                                origin[:, 2].unsqueeze(-1))
+
+        elem_converted['agent']['target'][..., 3] = wrap_angle(elem_converted['agent']['heading'][:, self.config.num_historical_steps:].squeeze() -
+                                                        theta.unsqueeze(-1))
+
+        try:
+            elem_converted['center_gt_trajs']           = torch.from_numpy(np.stack(data['center_gt_trajs'], axis=0))
+        except:
+            elem_converted['center_gt_trajs']           = data['center_gt_trajs']
+        try:
+            elem_converted['center_gt_trajs_mask']     = torch.from_numpy(np.stack(data['center_gt_trajs_mask'], axis=0))
+        except:
+            elem_converted['center_gt_trajs_mask']     = data['center_gt_trajs_mask']
+        try:
+            elem_converted['center_gt_final_valid_idx'] = torch.from_numpy(np.stack(data['center_gt_final_valid_idx'], axis=0))
+        except:
+            elem_converted['center_gt_final_valid_idx'] = data['center_gt_final_valid_idx']
+            
+        try:
+            elem_converted['center_gt_trajs_src']       = torch.from_numpy(np.stack(data['center_gt_trajs_src'], axis=0))
+        except:
+            elem_converted['center_gt_trajs_src']       = data['center_gt_trajs_src']
+
+        # Define the map data
+        elem_converted.update(self._convert_map_data(data))
+
+        # Append the converted data to the converted batch
+        return elem_converted
+
+    def __getitem__(self, index):
+        item = super().__getitem__(index)
+        item = HeteroData(self.prepare_data(item[0]))
+        return item
+    
+    def __collate_fn(self, data):
         # List containing the data of the modified batch
         converted_batch = []
 
