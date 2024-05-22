@@ -16,7 +16,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_scatter import segment_csr
+from motionnet.models.qcnet.utils.torch_scatter import segment_csr
 
 from motionnet.models.qcnet.losses.gaussian_nll_loss import GaussianNLLLoss
 

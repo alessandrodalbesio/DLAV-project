@@ -14,8 +14,8 @@
 from typing import Optional, Tuple
 
 import torch
-from torch_scatter import gather_csr
-from torch_scatter import segment_csr
+from motionnet.models.qcnet.utils.torch_scatter import gather_csr
+from motionnet.models.qcnet.utils.torch_scatter import segment_csr
 
 
 def topk(
