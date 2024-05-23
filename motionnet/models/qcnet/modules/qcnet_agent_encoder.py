@@ -32,7 +32,6 @@ from torch_cluster import radius_graph
 class QCNetAgentEncoder(nn.Module):
 
     def __init__(self,
-                 dataset: str,
                  input_dim: int,
                  hidden_dim: int,
                  num_historical_steps: int,
@@ -45,7 +44,6 @@ class QCNetAgentEncoder(nn.Module):
                  head_dim: int,
                  dropout: float) -> None:
         super(QCNetAgentEncoder, self).__init__()
-        self.dataset = dataset
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_historical_steps = num_historical_steps

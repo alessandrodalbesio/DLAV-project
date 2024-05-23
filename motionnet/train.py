@@ -46,12 +46,12 @@ def train(cfg):
     # Define the trainer
     trainer = pl.Trainer(
         max_epochs=cfg.method.max_epochs,
-        logger= None ,#if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),
+        logger= None if cfg.debug else WandbLogger(project="motionnet", name=cfg.exp_name),
         devices=1 if cfg.debug else cfg.devices,
         gradient_clip_val=cfg.method.grad_clip_norm,
         accelerator="cpu" if cfg.debug else "gpu",
         profiler="simple",
-        strategy="auto", #if cfg.debug else "ddp",
+        strategy="auto" if cfg.debug else "ddp_find_unused_parameters_true",
         callbacks=call_backs
     )
 

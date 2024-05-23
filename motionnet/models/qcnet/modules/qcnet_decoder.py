@@ -35,7 +35,6 @@ from motionnet.models.qcnet.utils import wrap_angle
 class QCNetDecoder(nn.Module):
 
     def __init__(self,
-                 dataset: str,
                  input_dim: int,
                  hidden_dim: int,
                  output_dim: int,
@@ -53,7 +52,6 @@ class QCNetDecoder(nn.Module):
                  head_dim: int,
                  dropout: float) -> None:
         super(QCNetDecoder, self).__init__()
-        self.dataset = dataset
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim

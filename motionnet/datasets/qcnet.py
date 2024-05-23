@@ -5,7 +5,7 @@ from motionnet.models.qcnet.utils import wrap_angle
 import numpy as np
 
 class QCNetDataset(BaseDataset):
-    def __init__(self, config=None, is_validation=False):
+    def __init__(self, config=None, is_validation=False, **kwargs):
         super().__init__(config, is_validation)
         self.config = config
         self.num_historical_steps = config['past_len']
@@ -39,7 +39,7 @@ class QCNetDataset(BaseDataset):
     def load_data(self):
         super().load_data()
         for i in range(len(self.data_loaded_memory)):
-            self.data_loaded_memory[i] = self.prepare_data(self.data_loaded_memory[i])
+            self.data_loaded_memory[i][0] = self.prepare_data(self.data_loaded_memory[i][0])
 
     def __getitem__(self, index):
         # Get the item
@@ -47,7 +47,7 @@ class QCNetDataset(BaseDataset):
         
         # Process the data
         if self.config['store_data_in_memory']:
-            return HeteroData(self.data_loaded_memory[index])
+            return HeteroData(item)
         else:
             return HeteroData(self.prepare_data(item))
 
@@ -68,7 +68,7 @@ class QCNetDataset(BaseDataset):
 
         # Fill in the agent type
         agent_type = torch.zeros(num_agents, dtype=torch.int) # Type of the agents
-        agent_type = torch.tensor(elem['obj_trajs'][:,0,6:11].argmax(axis=1), dtype=torch.int)
+        agent_type = torch.tensor(elem['obj_trajs'][:,:,6:11].argmax(axis=1), dtype=torch.int)
         
         # Fill in the position
         position = torch.zeros(num_agents, tot_time_len, 2, dtype=torch.float) # Position of the agents
@@ -96,7 +96,7 @@ class QCNetDataset(BaseDataset):
         predict_mask = torch.zeros(num_agents, tot_time_len, dtype=torch.bool) # Mask of the agents to predict
         predict_mask[:, :past_len] = torch.tensor([False]*past_len)
         predict_mask[:, past_len:] = torch.tensor([True]*future_len)
-        predict_mask[:, past_len:][elem['obj_trajs_mask'][:,-1]] = False
+        predict_mask[:, past_len:][not elem['obj_trajs_mask'][:,-1]] = False
 
         # Return the prepared data
         return {
@@ -122,16 +122,16 @@ class QCNetDataset(BaseDataset):
 
         # Define a flattened mask
         points = elem['map_polylines']
-        points_reshaped = points.reshape(-1,points.shape[2])
+        points_reshaped = points.reshape(-1,points.shape[-1])
 
         # Define the polygon - point mapping
         k, n = points.shape[0], points.shape[1]
-        points_pol_indeces = np.repeat(np.arange(k), n)
+        points_pol_indexes = np.repeat(np.arange(k), n)
 
         # Filter everything
         points_filtered = points_reshaped[mask_reshaped,:]
-        points_pol_indeces_filtered = points_pol_indeces[mask_reshaped]
-        points_indeces = np.arange(points_filtered.shape[0])
+        points_pol_indexes_filtered = points_pol_indexes[mask_reshaped]
+        points_indexes = np.arange(points_filtered.shape[0])
 
         # Define the empty dictionary
         map_data['map_point'] = {}
@@ -144,31 +144,31 @@ class QCNetDataset(BaseDataset):
         map_data['map_point']['type'] = torch.tensor(points_filtered[:,6], dtype=torch.int)
         map_data['map_point']['magnitude'] = torch.zeros(points_filtered.shape[0], dtype=torch.float)
         for num_pol in range(k):
-            i = np.argwhere(points_pol_indeces_filtered == num_pol)
+            i = np.argwhere(points_pol_indexes_filtered == num_pol)
             if len(i) != 0:
                 map_data['map_point']['magnitude'][i[0]] = torch.tensor(0, dtype=torch.float)
                 if len(i) > 1:
                     map_data['map_point']['magnitude'][i[1:]] = torch.tensor(np.linalg.norm(points_filtered[i[1:],0:2]-points_filtered[i[:-1],0:2], axis=2), dtype=torch.float)
         map_data['map_point']['num_nodes'] = points_filtered.shape[0]
-        map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor(np.array([points_indeces, points_pol_indeces_filtered]), dtype=torch.long)
+        map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor(np.array([points_indexes, points_pol_indexes_filtered]), dtype=torch.long)
 
         # Get the polygon data ("map_polygon")
         map_data['map_polygon'] = {}
         map_data[('map_polygon', 'to', 'map_polygon')] = {}
 
-        # Get from points_pol_indeces_filtered the first index of each polygon
-        first_indeces = np.unique(points_pol_indeces_filtered, return_index=True)[1]
-        map_data['map_polygon']['position'] = torch.tensor(points_filtered[first_indeces,0:2], dtype=torch.float)
-        map_data['map_polygon']['orientation'] = torch.tensor(np.arctan2(points_filtered[first_indeces,4],points_filtered[first_indeces,3]), dtype=torch.float)
-        map_data['map_polygon']['height'] = torch.tensor(points_filtered[first_indeces,2], dtype=torch.float)
-        map_data['map_polygon']['type'] = torch.tensor(points_filtered[first_indeces,6], dtype=torch.int)
-        map_data['map_polygon']['num_nodes'] = first_indeces.shape[0]
+        # Get from points_pol_indexes_filtered the first index of each polygon
+        first_indexes = np.unique(points_pol_indexes_filtered, return_index=True)[1]
+        map_data['map_polygon']['position'] = torch.tensor(points_filtered[first_indexes,0:2], dtype=torch.float)
+        map_data['map_polygon']['orientation'] = torch.tensor(np.arctan2(points_filtered[first_indexes,4],points_filtered[first_indexes,3]), dtype=torch.float)
+        map_data['map_polygon']['height'] = torch.tensor(points_filtered[first_indexes,2], dtype=torch.float)
+        map_data['map_polygon']['type'] = torch.tensor(points_filtered[first_indexes,6], dtype=torch.int)
+        map_data['map_polygon']['num_nodes'] = first_indexes.shape[0]
         
-        # Associate for each polygon index all the other polygon indeces
-        #for i in range(first_indeces.shape[0]):
-        #    indeces_other_pol = np.delete(np.arange(first_indeces.shape[0]),i)
-        #    if len(indeces_other_pol) > 0:
-        #        map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'] = torch.cat((map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'], torch.tensor([np.repeat(i,len(indeces_other_pol)), indeces_other_pol], dtype=torch.long), 1))
+        # Associate for each polygon index all the other polygon indexes
+        #for i in range(first_indexes.shape[0]):
+        #    indexes_other_pol = np.delete(np.arange(first_indexes.shape[0]),i)
+        #    if len(indexes_other_pol) > 0:
+        #        map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'] = torch.cat((map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'], torch.tensor([np.repeat(i,len(indexes_other_pol)), indexes_other_pol], dtype=torch.long), 1))
         
         # Return the map data
         return map_data

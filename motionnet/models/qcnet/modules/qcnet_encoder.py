@@ -24,7 +24,6 @@ from motionnet.models.qcnet.modules.qcnet_map_encoder import QCNetMapEncoder
 class QCNetEncoder(nn.Module):
 
     def __init__(self,
-                 dataset: str,
                  input_dim: int,
                  hidden_dim: int,
                  num_historical_steps: int,
@@ -40,7 +39,6 @@ class QCNetEncoder(nn.Module):
                  dropout: float) -> None:
         super(QCNetEncoder, self).__init__()
         self.map_encoder = QCNetMapEncoder(
-            dataset=dataset,
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             num_historical_steps=num_historical_steps,
@@ -52,7 +50,6 @@ class QCNetEncoder(nn.Module):
             dropout=dropout,
         )
         self.agent_encoder = QCNetAgentEncoder(
-            dataset=dataset,
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             num_historical_steps=num_historical_steps,

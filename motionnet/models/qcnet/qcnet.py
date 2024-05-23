@@ -42,7 +42,6 @@ class QCNet(BaseModel):
     def __init__(self,config):    
         super(QCNet, self).__init__(config)
 
-        self.dataset = config['dataset']
         self.input_dim = config['input_dim']
         self.hidden_dim = config['hidden_dim']
         self.output_dim = config['output_dim']
@@ -70,7 +69,6 @@ class QCNet(BaseModel):
         self.T_max = config['T_max']
 
         self.encoder = QCNetEncoder(
-            dataset=self.dataset,
             input_dim=self.input_dim,
             hidden_dim=self.hidden_dim,
             num_historical_steps=self.num_historical_steps,
@@ -86,7 +84,6 @@ class QCNet(BaseModel):
             dropout=self.dropout,
         )
         self.decoder = QCNetDecoder(
-            dataset=self.dataset,
             input_dim=self.input_dim,
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
@@ -120,7 +117,6 @@ class QCNet(BaseModel):
         self.minFDE = minFDE(max_guesses=6)
         self.minFHE = minFHE(max_guesses=6)
         self.MR = MR(max_guesses=6)
-        
 
         self.test_predictions = dict()
 
@@ -165,26 +161,20 @@ class QCNet(BaseModel):
                                  prob=pi,
                                  mask=reg_mask[:, -1:]) * cls_mask
         cls_loss = cls_loss.sum() / cls_mask.sum().clamp_(min=1)
-        self.log('train_reg_loss_propose', reg_loss_propose, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
-        self.log('train_reg_loss_refine', reg_loss_refine, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
-        self.log('train_cls_loss', cls_loss, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
-        loss = reg_loss_propose + reg_loss_refine + cls_loss
-        #                 32, 6, 60, x>
-        # pred_obs: shape [B, c, T, 5] trajectories for the ego agents with every point being the params of
-        #                                 Bivariate Gaussian distribution.
-        # mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
-        
+        loss = reg_loss_propose + reg_loss_refine + cls_loss        
   
-        # Modify the output to make it compatible with the log_info function
+        # Filter out only the agent
         max_num_agents = self.config['max_num_agents']
         indexes = max_num_agents * torch.arange(data['agent']['target'].shape[0] // max_num_agents)
         pi_filtered = pi[indexes]
         traj_filtered = traj_refine[indexes]
         
+        # Get the filtered trajectory and the predicted probability (compute the softmax to normalize everything)
         output = dict()
         output['predicted_trajectory'] = traj_filtered
         output['predicted_probability'] = F.softmax(pi_filtered, dim=-1)
 
+        # Return output and loss
         return output, loss
 
 
@@ -225,15 +215,15 @@ class QCNet(BaseModel):
 
     def log_info(self, inputs, prediction, status='train'): 
         # Get the dimensions
-        total_future_len = self.config['num_future_steps']
         T = self.config['num_future_steps']
-        B = inputs['center_gt_trajs'].shape[0] // total_future_len
+        B = inputs['center_gt_trajs'].shape[0] // T
 
         # Modify the ground truth to make it compatible with the log_info function
         gt_traj = inputs['center_gt_trajs'].reshape(B,T,-1).unsqueeze(1)
         gt_traj_mask = inputs['center_gt_trajs_mask'].reshape(B,T,-1).squeeze(-1).unsqueeze(1)
         center_gt_final_valid_idx = torch.tensor(inputs['center_gt_final_valid_idx']).detach().cpu()
 
+        # Get the predicted trajectory and probability
         predicted_traj = prediction['predicted_trajectory']
         predicted_prob = prediction['predicted_probability'].detach().cpu().numpy()
 
@@ -255,63 +245,18 @@ class QCNet(BaseModel):
         miss_rate = (minfde > 2.0)
         brier_fde = minfde + (1 - predicted_prob)
 
+        # Define the losses dictionary
         loss_dict = {
-                    'minADE6': minade,
-                    'minFDE6': minfde,
-                    'miss_rate': miss_rate.astype(np.float32),
-                    'brier_fde': brier_fde}
-
-        new_dict = {}
-        dataset_names = inputs['dataset_name']
-        unique_dataset_names = np.unique(dataset_names)
-        for dataset_name in unique_dataset_names:
-            batch_idx_for_this_dataset = np.argwhere([n == str(dataset_name) for n in dataset_names])[:,0]
-            for key in loss_dict.keys():
-                new_dict[dataset_name+'/'+key] = loss_dict[key][batch_idx_for_this_dataset]
-        # merge new_dict with log_dict
-        loss_dict.update(new_dict)
-
-        if status == 'val' and self.config.get('eval', False):
-            important_metrics = ["brier_fde", "minADE6", "minFDE6", "miss_rate"]
-
-            # Split scores based on trajectory type
-            new_dict = {}
-            trajectory_types = inputs["trajectory_type"]
-            trajectory_correspondance = {0: "stationary", 1: "straight", 2: "straight_right",
-                3: "straight_left", 4: "right_u_turn", 5: "right_turn",
-                6: "left_u_turn", 7: "left_turn"}
-            for traj_type in range(8):
-                batch_idx_for_traj_type = np.where(trajectory_types == traj_type)[0]
-                if len(batch_idx_for_traj_type) > 0:
-                    for key in important_metrics:
-                        new_dict["traj_type/" + trajectory_correspondance[traj_type] + "_" + key] = loss_dict[key][batch_idx_for_traj_type]
-            loss_dict.update(new_dict)
-
-            # Split scores based on kalman_difficulty @6s
-            new_dict = {}
-            kalman_difficulties = inputs["kalman_difficulty"][:, -1] # Last is difficulty at 6s (others are 2s and 4s)
-            for kalman_bucket, (low, high) in {"easy": [0, 30], "medium": [30, 60], "hard": [60, 9999999]}.items():
-                batch_idx_for_kalman_diff = np.where(np.logical_and(low <= kalman_difficulties, kalman_difficulties < high))[0]
-                if len(batch_idx_for_kalman_diff) > 0:
-                    for key in important_metrics:
-                        new_dict["kalman/" + kalman_bucket + "_" + key] = loss_dict[key][batch_idx_for_kalman_diff]
-            loss_dict.update(new_dict)
-
-            new_dict = {}
-            agent_types = [1,2,3]
-            agent_type_dict = {1: "vehicle", 2: "pedestrian", 3: "bicycle"}
-            for type in agent_types:
-                batch_idx_for_type = np.where(inputs['center_objects_type'] == type)[0]
-                if len(batch_idx_for_type) > 0:
-                    for key in important_metrics:
-                        new_dict["agent_types"+'/'+agent_type_dict[type]+"_"+key] = loss_dict[key][batch_idx_for_type]
-            # merge new_dict with log_dict
-            loss_dict.update(new_dict)
+            'minADE6': minade,
+            'minFDE6': minfde,
+            'miss_rate': miss_rate.astype(np.float32),
+            'brier_fde': brier_fde
+        }
 
         # Take mean for each key but store original length before (useful for aggregation)
         size_dict = {key: len(value) for key, value in loss_dict.items()}
         loss_dict = {key: np.mean(value) for key, value in loss_dict.items()}
 
+        # Do the logging
         for k, v in loss_dict.items():
-            self.log(status+"/" + k, v, on_step=False, on_epoch=True, sync_dist=True, batch_size=size_dict[k])
-        return
+            self.log(status+"/" + k, v, on_step=True, on_epoch=True, sync_dist=True, batch_size=size_dict[k])

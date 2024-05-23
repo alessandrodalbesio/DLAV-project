@@ -30,7 +30,6 @@ from motionnet.models.qcnet.utils import wrap_angle
 class QCNetMapEncoder(nn.Module):
 
     def __init__(self,
-                 dataset: str,
                  input_dim: int,
                  hidden_dim: int,
                  num_historical_steps: int,
@@ -41,7 +40,6 @@ class QCNetMapEncoder(nn.Module):
                  head_dim: int,
                  dropout: float) -> None:
         super(QCNetMapEncoder, self).__init__()
-        self.dataset = dataset
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_historical_steps = num_historical_steps
