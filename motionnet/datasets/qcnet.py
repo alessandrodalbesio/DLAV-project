@@ -2,7 +2,6 @@ import torch
 from .base_dataset import BaseDataset
 from torch_geometric.data import HeteroData
 from motionnet.models.qcnet.utils import wrap_angle
-from time import time
 import numpy as np
 
 class QCNetDataset(BaseDataset):
@@ -37,8 +36,20 @@ class QCNetDataset(BaseDataset):
         # Append the converted data to the converted batch
         return elem_converted
 
+    def load_data(self):
+        super().load_data()
+        for i in range(len(self.data_loaded_memory)):
+            self.data_loaded_memory[i] = self.prepare_data(self.data_loaded_memory[i])
+
     def __getitem__(self, index):
-        return HeteroData(self.prepare_data(super().__getitem__(index)[0]))
+        # Get the item
+        item = super().__getitem__(index)
+        
+        # Process the data
+        if self.config['store_data_in_memory']:
+            return HeteroData(self.data_loaded_memory[index])
+        else:
+            return HeteroData(self.prepare_data(item))
 
     def _convert_agent_data(self,elem):
         # Define the number of valid agents
@@ -139,7 +150,7 @@ class QCNetDataset(BaseDataset):
                 if len(i) > 1:
                     map_data['map_point']['magnitude'][i[1:]] = torch.tensor(np.linalg.norm(points_filtered[i[1:],0:2]-points_filtered[i[:-1],0:2], axis=2), dtype=torch.float)
         map_data['map_point']['num_nodes'] = points_filtered.shape[0]
-        map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor([points_indeces, points_pol_indeces_filtered], dtype=torch.long)
+        map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor(np.array([points_indeces, points_pol_indeces_filtered]), dtype=torch.long)
 
         # Get the polygon data ("map_polygon")
         map_data['map_polygon'] = {}
