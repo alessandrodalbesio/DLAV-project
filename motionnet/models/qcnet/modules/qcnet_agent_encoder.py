@@ -26,8 +26,8 @@ from motionnet.models.qcnet.layers.fourier_embedding import FourierEmbedding
 from motionnet.models.qcnet.utils import angle_between_2d_vectors
 from motionnet.models.qcnet.utils import weight_init
 from motionnet.models.qcnet.utils import wrap_angle
-from motionnet.models.qcnet.utils.radius import radius
-from motionnet.models.qcnet.utils.radius import radius_graph
+from torch_cluster import radius
+from torch_cluster import radius_graph
 
 class QCNetAgentEncoder(nn.Module):
 
