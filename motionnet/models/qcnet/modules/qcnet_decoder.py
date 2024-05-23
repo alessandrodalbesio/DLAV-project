@@ -161,7 +161,7 @@ class QCNetDecoder(nn.Module):
         rel_head_t2m = wrap_angle(head_t[edge_index_t2m[0]] - head_m[edge_index_t2m[1]])
         r_t2m = torch.stack(
             [torch.norm(rel_pos_t2m[:, :2], p=2, dim=-1),
-             angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_t2m[1]].squeeze(), nbr_vector=rel_pos_t2m[:, :2].squeeze()),
+             angle_between_2d_vectors(ctr_vector=head_vector_m[edge_index_t2m[1]], nbr_vector=rel_pos_t2m[:, :2]),
              rel_head_t2m,
              (edge_index_t2m[0] % self.num_historical_steps) - self.num_historical_steps + 1], dim=-1)
         r_t2m = self.r_t2m_emb(continuous_inputs=r_t2m, categorical_embs=None)

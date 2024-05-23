@@ -15,6 +15,7 @@ from itertools import chain
 from itertools import compress
 from pathlib import Path
 from typing import Optional
+import numpy as np
 
 import pytorch_lightning as pl
 import torch
@@ -104,10 +105,14 @@ class QCNet(BaseModel):
             dropout=self.dropout,
         )
 
-        self.reg_loss = NLLLoss(component_distribution=['laplace'] * self.output_dim + ['von_mises'] * self.output_head,
-                                reduction='none')
-        self.cls_loss = MixtureNLLLoss(component_distribution=['laplace'] * self.output_dim + ['von_mises'] * self.output_head,
-                                       reduction='none')
+        self.reg_loss = NLLLoss(
+            component_distribution=['laplace'] * self.output_dim + ['von_mises'] * self.output_head,
+            reduction='none'
+        )
+        self.cls_loss = MixtureNLLLoss(
+            component_distribution=['laplace'] * self.output_dim + ['von_mises'] * self.output_head,
+            reduction='none'
+        )
 
         self.Brier = Brier(max_guesses=6)
         self.minADE = minADE(max_guesses=6)
@@ -120,9 +125,6 @@ class QCNet(BaseModel):
         self.test_predictions = dict()
 
     def forward(self, data, batch_idx):
-        # data is already a HeteroData object in the original QCNet implementation, from the get function of the datasets/argoverse_v2_dataset.py file
-        # this does not work: data = HeteroData(data)
-        data.to(self.device)
         scene_enc = self.encoder(data)
         pred = self.decoder(data, scene_enc)
 
@@ -167,15 +169,21 @@ class QCNet(BaseModel):
         self.log('train_reg_loss_refine', reg_loss_refine, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
         self.log('train_cls_loss', cls_loss, prog_bar=False, on_step=True, on_epoch=True, batch_size=1)
         loss = reg_loss_propose + reg_loss_refine + cls_loss
-
-        # pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
+        #                 32, 6, 60, x>
+        # pred_obs: shape [B, c, T, 5] trajectories for the ego agents with every point being the params of
         #                                 Bivariate Gaussian distribution.
         # mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
         
+  
+        # Modify the output to make it compatible with the log_info function
+        max_num_agents = self.config['max_num_agents']
+        indexes = max_num_agents * torch.arange(data['agent']['target'].shape[0] // max_num_agents)
+        pi_filtered = pi[indexes]
+        traj_filtered = traj_refine[indexes]
+        
         output = dict()
-
-        output['predicted_trajectory'] = traj_refine
-        output['predicted_probability'] = F.softmax(pred['pi'], dim=-1)
+        output['predicted_trajectory'] = traj_filtered
+        output['predicted_probability'] = F.softmax(pi_filtered, dim=-1)
 
         return output, loss
 
@@ -214,3 +222,96 @@ class QCNet(BaseModel):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.lr, weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=self.T_max, eta_min=0.0)
         return [optimizer], [scheduler]
+
+    def log_info(self, inputs, prediction, status='train'): 
+        # Get the dimensions
+        total_future_len = self.config['num_future_steps']
+        T = self.config['num_future_steps']
+        B = inputs['center_gt_trajs'].shape[0] // total_future_len
+
+        # Modify the ground truth to make it compatible with the log_info function
+        gt_traj = inputs['center_gt_trajs'].reshape(B,T,-1).unsqueeze(1)
+        gt_traj_mask = inputs['center_gt_trajs_mask'].reshape(B,T,-1).squeeze(-1).unsqueeze(1)
+        center_gt_final_valid_idx = torch.tensor(inputs['center_gt_final_valid_idx']).detach().cpu()
+
+        predicted_traj = prediction['predicted_trajectory']
+        predicted_prob = prediction['predicted_probability'].detach().cpu().numpy()
+
+        # Calculate ADE losses
+        ade_diff = torch.norm(predicted_traj[:, :, :, :2] - gt_traj[:, :, :, :2], 2, dim=-1)
+        ade_losses = torch.sum(ade_diff * gt_traj_mask, dim=-1) / torch.sum(gt_traj_mask, dim=-1)
+        ade_losses = ade_losses.cpu().detach().numpy()
+        minade = np.min(ade_losses, axis=1)
+
+        # Calculate FDE losses
+        bs,modes,future_len = ade_diff.shape
+        center_gt_final_valid_idx = center_gt_final_valid_idx.view(-1,1,1).repeat(1,modes,1).to(torch.int64)
+
+        fde = torch.gather(ade_diff.cpu().detach(),-1,center_gt_final_valid_idx).cpu().detach().numpy().squeeze(-1)
+        minfde = np.min(fde, axis=-1)
+
+        best_fde_idx = np.argmin(fde, axis=-1)
+        predicted_prob = predicted_prob[np.arange(bs),best_fde_idx]
+        miss_rate = (minfde > 2.0)
+        brier_fde = minfde + (1 - predicted_prob)
+
+        loss_dict = {
+                    'minADE6': minade,
+                    'minFDE6': minfde,
+                    'miss_rate': miss_rate.astype(np.float32),
+                    'brier_fde': brier_fde}
+
+        new_dict = {}
+        dataset_names = inputs['dataset_name']
+        unique_dataset_names = np.unique(dataset_names)
+        for dataset_name in unique_dataset_names:
+            batch_idx_for_this_dataset = np.argwhere([n == str(dataset_name) for n in dataset_names])[:,0]
+            for key in loss_dict.keys():
+                new_dict[dataset_name+'/'+key] = loss_dict[key][batch_idx_for_this_dataset]
+        # merge new_dict with log_dict
+        loss_dict.update(new_dict)
+
+        if status == 'val' and self.config.get('eval', False):
+            important_metrics = ["brier_fde", "minADE6", "minFDE6", "miss_rate"]
+
+            # Split scores based on trajectory type
+            new_dict = {}
+            trajectory_types = inputs["trajectory_type"]
+            trajectory_correspondance = {0: "stationary", 1: "straight", 2: "straight_right",
+                3: "straight_left", 4: "right_u_turn", 5: "right_turn",
+                6: "left_u_turn", 7: "left_turn"}
+            for traj_type in range(8):
+                batch_idx_for_traj_type = np.where(trajectory_types == traj_type)[0]
+                if len(batch_idx_for_traj_type) > 0:
+                    for key in important_metrics:
+                        new_dict["traj_type/" + trajectory_correspondance[traj_type] + "_" + key] = loss_dict[key][batch_idx_for_traj_type]
+            loss_dict.update(new_dict)
+
+            # Split scores based on kalman_difficulty @6s
+            new_dict = {}
+            kalman_difficulties = inputs["kalman_difficulty"][:, -1] # Last is difficulty at 6s (others are 2s and 4s)
+            for kalman_bucket, (low, high) in {"easy": [0, 30], "medium": [30, 60], "hard": [60, 9999999]}.items():
+                batch_idx_for_kalman_diff = np.where(np.logical_and(low <= kalman_difficulties, kalman_difficulties < high))[0]
+                if len(batch_idx_for_kalman_diff) > 0:
+                    for key in important_metrics:
+                        new_dict["kalman/" + kalman_bucket + "_" + key] = loss_dict[key][batch_idx_for_kalman_diff]
+            loss_dict.update(new_dict)
+
+            new_dict = {}
+            agent_types = [1,2,3]
+            agent_type_dict = {1: "vehicle", 2: "pedestrian", 3: "bicycle"}
+            for type in agent_types:
+                batch_idx_for_type = np.where(inputs['center_objects_type'] == type)[0]
+                if len(batch_idx_for_type) > 0:
+                    for key in important_metrics:
+                        new_dict["agent_types"+'/'+agent_type_dict[type]+"_"+key] = loss_dict[key][batch_idx_for_type]
+            # merge new_dict with log_dict
+            loss_dict.update(new_dict)
+
+        # Take mean for each key but store original length before (useful for aggregation)
+        size_dict = {key: len(value) for key, value in loss_dict.items()}
+        loss_dict = {key: np.mean(value) for key, value in loss_dict.items()}
+
+        for k, v in loss_dict.items():
+            self.log(status+"/" + k, v, on_step=False, on_epoch=True, sync_dist=True, batch_size=size_dict[k])
+        return

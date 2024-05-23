@@ -157,10 +157,9 @@ class BaseModel(pl.LightningModule):
 
             self.pred_dicts += pred_dict_list
 
-    def log_info(self, batch, prediction, status='train'):        
+    def log_info(self, inputs, prediction, status='train'): 
         ## logging
         # Split based on dataset
-        inputs = batch['input_dict']
         gt_traj = inputs['center_gt_trajs'].unsqueeze(1)#.transpose(0, 1).unsqueeze(0)
         gt_traj_mask = inputs['center_gt_trajs_mask'].unsqueeze(1)
         center_gt_final_valid_idx = inputs['center_gt_final_valid_idx']
