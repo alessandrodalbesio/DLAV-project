@@ -1,7 +1,9 @@
-from .ptr_dataset import PTRDataset
+from .ptr import PTRDataset
+from .qcnet import QCNetDataset
 
 __all__ = {
     'ptr': PTRDataset,
+    'qcnet': QCNetDataset,
 }
 
 def build_dataset(config,val=False):

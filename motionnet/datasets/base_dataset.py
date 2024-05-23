@@ -49,7 +49,8 @@ class BaseDataset(Dataset):
 
         for cnt, data_path in enumerate(self.data_path):
             dataset_name = data_path.split('/')[-1]
-            self.cache_path = os.path.join(data_path, f'cache_{self.config.method.model_name}')
+            #self.cache_path = os.path.join(data_path, f'cache_{self.config.method.model_name}')
+            self.cache_path = os.path.join(data_path, 'cache_ptr')
 
             data_usage_this_dataset = self.config['max_data_num'][cnt]
             data_usage_this_dataset = int(data_usage_this_dataset/self.data_chunk_size)
