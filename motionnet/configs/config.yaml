@@ -20,7 +20,7 @@ only_train_on_ego: False
 center_offset_of_map: [30.0, 0.0]
 use_cache: False
 overwrite_cache: False
-store_data_in_memory: False
+store_data_in_memory: True
 
 # official evaluation
 nuscenes_dataroot: '/mnt/nas3_rcp_enac_u0900_vita_scratch/datasets/Prediction-Dataset/nuscenes/nuscenes_root'

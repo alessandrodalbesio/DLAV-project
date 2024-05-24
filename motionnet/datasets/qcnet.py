@@ -39,17 +39,8 @@ class QCNetDataset(BaseDataset):
     def load_data(self):
         super().load_data()
         for i in range(len(self.data_loaded_memory)):
-            self.data_loaded_memory[i][0] = self.prepare_data(self.data_loaded_memory[i][0])
+            self.data_loaded_memory[i][0] = HeteroData(self.prepare_data(self.data_loaded_memory[i][0]))
 
-    def __getitem__(self, index):
-        # Get the item
-        item = super().__getitem__(index)
-        
-        # Process the data
-        if self.config['store_data_in_memory']:
-            return HeteroData(item)
-        else:
-            return HeteroData(self.prepare_data(item))
 
     def _convert_agent_data(self,elem):
         # Define the number of valid agents
