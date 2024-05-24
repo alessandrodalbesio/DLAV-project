@@ -51,7 +51,7 @@ def train(cfg):
         gradient_clip_val=cfg.method.grad_clip_norm,
         accelerator="cpu" if cfg.debug else "gpu",
         profiler="simple",
-        strategy="auto" if cfg.debug else "ddp_find_unused_parameters_true",
+        strategy="auto" if cfg.debug else "ddp",
         callbacks=call_backs
     )
 
