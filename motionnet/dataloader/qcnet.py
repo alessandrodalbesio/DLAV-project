@@ -10,4 +10,3 @@ class QCNetDataLoader(DataLoader):
             drop_last=False,
             pin_memory=True,
         )
-        self.cfg = cfg

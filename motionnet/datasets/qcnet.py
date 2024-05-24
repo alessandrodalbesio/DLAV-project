@@ -19,7 +19,7 @@ class QCNetDataset(BaseDataset):
         elem_converted['scenario_id'] = data['scenario_id']
             
         # Get the city name (use dataset name as city name for now)
-        elem_converted['city'] = data['dataset_name']
+        elem_converted['dataset_name'] = data['dataset_name']
             
         # Define the agent data
         elem_converted['agent'] = self._convert_agent_data(data)
@@ -38,9 +38,17 @@ class QCNetDataset(BaseDataset):
 
     def load_data(self):
         super().load_data()
-        for i in range(len(self.data_loaded_memory)):
-            self.data_loaded_memory[i][0] = HeteroData(self.prepare_data(self.data_loaded_memory[i][0]))
+        if self.config['store_data_in_memory']:
+            for i in range(len(self.data_loaded_memory)):
+                if i % 100 == 0:
+                    print(f"Converting data {i+1} of {len(self.data_loaded_memory)}")
+                self.data_loaded_memory[i][0] = HeteroData(self.prepare_data(self.data_loaded_memory[i][0]))
 
+    def __getitem__(self, idx):
+        if self.config['store_data_in_memory']:
+            return self.data_loaded_memory[idx][0]
+        else:
+            return HeteroData(self.prepare_data(self.data_loaded[idx][0]))
 
     def _convert_agent_data(self,elem):
         # Define the number of valid agents
@@ -59,7 +67,7 @@ class QCNetDataset(BaseDataset):
 
         # Fill in the agent type
         agent_type = torch.zeros(num_agents, dtype=torch.int) # Type of the agents
-        agent_type = torch.tensor(elem['obj_trajs'][:,:,6:11].argmax(axis=1), dtype=torch.int)
+        agent_type = torch.tensor(elem['obj_trajs'][:,:,6:11].argmax(axis=2)[0], dtype=torch.int)
         
         # Fill in the position
         position = torch.zeros(num_agents, tot_time_len, 2, dtype=torch.float) # Position of the agents
@@ -87,7 +95,8 @@ class QCNetDataset(BaseDataset):
         predict_mask = torch.zeros(num_agents, tot_time_len, dtype=torch.bool) # Mask of the agents to predict
         predict_mask[:, :past_len] = torch.tensor([False]*past_len)
         predict_mask[:, past_len:] = torch.tensor([True]*future_len)
-        predict_mask[:, past_len:][not elem['obj_trajs_mask'][:,-1]] = False
+        for i in range(num_agents):
+            predict_mask[i, past_len:][not elem['obj_trajs_mask'][i,-1]] = False
 
         # Return the prepared data
         return {
