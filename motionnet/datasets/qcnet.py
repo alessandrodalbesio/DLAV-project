@@ -173,7 +173,8 @@ class QCNetDataset(BaseDataset):
         rot_mat[:, 0, 1] = -sin
         rot_mat[:, 1, 0] = sin
         rot_mat[:, 1, 1] = cos
-        agent['target'] = origin.new_zeros(agent['num_nodes'], self.num_future_steps, 4)
+        num_future_steps = self.config['num_future_steps']
+        agent['target'] = origin.new_zeros(agent['num_nodes'], num_future_steps, 4)
         agent['target'][..., :2] = torch.bmm(agent['position'][:, self.config.num_historical_steps:, :2] -
                                                             origin[:, :2].unsqueeze(1), rot_mat)
         if agent['position'].size(2) == 3:
