@@ -4,8 +4,7 @@ eval_batch_size: 1
 max_epochs: 100
 grad_clip_norm: 5
 
-dataset: argoverse_v2
-input_dim: 2
+input_dim: 2 # We consider only x and y for the position
 hidden_dim: 128
 output_dim: 2
 output_head: true

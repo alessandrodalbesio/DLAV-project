@@ -11,15 +11,15 @@ class QCNetDataset(BaseDataset):
         self.num_historical_steps = config['past_len']
         self.num_future_steps = config['future_len']
 
-    def prepare_data(self,data):     
+    def prepare_data(self,data):  
         # Define the dictionary that will contain the converted data
         elem_converted = dict()
             
         # Define the scenario_id
         elem_converted['scenario_id'] = data['scenario_id']
-            
-        # Get the city name (use dataset name as city name for now)
-        elem_converted['city'] = data['dataset_name']
+
+        # Define the dataset used
+        elem_converted['dataset'] = data['dataset']
             
         # Define the agent data
         elem_converted['agent'] = self._convert_agent_data(data)
@@ -37,19 +37,18 @@ class QCNetDataset(BaseDataset):
         return elem_converted
 
     def load_data(self):
+        def _cache_preparation(self):
+            pass
+        
+        # Prepare the data and create the cache
+        _cache_preparation(self)
+
+        # Load the data
         super().load_data()
-        for i in range(len(self.data_loaded_memory)):
-            self.data_loaded_memory[i][0] = self.prepare_data(self.data_loaded_memory[i][0])
 
     def __getitem__(self, index):
-        # Get the item
-        item = super().__getitem__(index)
-        
-        # Process the data
-        if self.config['store_data_in_memory']:
-            return HeteroData(item)
-        else:
-            return HeteroData(self.prepare_data(item))
+        return HeteroData(self.prepare_data(super().__getitem__(index)[0]))
+        return HeteroData(super().__getitem__(index)[0])
 
     def _convert_agent_data(self,elem):
         # Define the number of valid agents
@@ -68,7 +67,7 @@ class QCNetDataset(BaseDataset):
 
         # Fill in the agent type
         agent_type = torch.zeros(num_agents, dtype=torch.int) # Type of the agents
-        agent_type = torch.tensor(elem['obj_trajs'][:,:,6:11].argmax(axis=1), dtype=torch.int)
+        agent_type = torch.tensor(elem['obj_trajs'][:,:,6:11].argmax(axis=1), dtype=torch.int) # Unsert, Vehicle, Pedestrian, Cyclist, Other
         
         # Fill in the position
         position = torch.zeros(num_agents, tot_time_len, 2, dtype=torch.float) # Position of the agents
@@ -84,7 +83,7 @@ class QCNetDataset(BaseDataset):
         heading = torch.zeros(num_agents, tot_time_len, 1, dtype=torch.float) # Heading of the agents
         heading_angles = np.arctan2(elem['obj_trajs'][:,:,34], elem['obj_trajs'][:,:,33])[:, :, np.newaxis]
         heading[:, :past_len, :] = torch.tensor(heading_angles)
-        heading_angles_futures = np.arctan2(elem['obj_trajs_future_state'][:,:,3], elem['obj_trajs_future_state'][:,:,2])[:, :, np.newaxis]
+        heading_angles_futures = np.arctan2(elem['obj_trajs_future_state'][:,:,3], elem['obj_trajs_future_state'][:,:,2])[:, :, np.newaxis] # Use the speeds to compute the future heading
         heading[:, past_len:, :] = torch.tensor(heading_angles_futures)
 
         # Fill in the valid mask
@@ -95,8 +94,21 @@ class QCNetDataset(BaseDataset):
         # Fill in the predict mask
         predict_mask = torch.zeros(num_agents, tot_time_len, dtype=torch.bool) # Mask of the agents to predict
         predict_mask[:, :past_len] = torch.tensor([False]*past_len)
-        predict_mask[:, past_len:] = torch.tensor([True]*future_len)
-        predict_mask[:, past_len:][not elem['obj_trajs_mask'][:,-1]] = False
+        predict_mask[:, past_len:] = torch.tensor([True]*future_len) 
+        for i in range(num_agents):
+            predict_mask[i, past_len:][not elem['obj_trajs_mask'][i,-1]] = False
+
+        #valid_mask[agent_idx, agent_steps] = True
+        #current_valid_mask[agent_idx] = valid_mask[agent_idx, self.num_historical_steps - 1]
+        #predict_mask[agent_idx, agent_steps] = True
+        #if self.vector_repr:  # a time step t is valid only when both t and t-1 are valid
+        #    valid_mask[agent_idx, 1: self.num_historical_steps] = (
+        #        valid_mask[agent_idx, :self.num_historical_steps - 1] &
+        #        valid_mask[agent_idx, 1: self.num_historical_steps])
+        #    valid_mask[agent_idx, 0] = False
+        #predict_mask[agent_idx, :self.num_historical_steps] = False
+        #if not current_valid_mask[agent_idx]:
+        #    predict_mask[agent_idx, self.num_historical_steps:] = False
 
         # Return the prepared data
         return {
@@ -142,19 +154,22 @@ class QCNetDataset(BaseDataset):
         map_data['map_point']['orientation'] = torch.tensor(np.arctan2(points_filtered[:,4],points_filtered[:,3]), dtype=torch.float)
         map_data['map_point']['height'] = torch.tensor(points_filtered[:,2], dtype=torch.float)
         map_data['map_point']['type'] = torch.tensor(points_filtered[:,6], dtype=torch.int)
-        map_data['map_point']['magnitude'] = torch.zeros(points_filtered.shape[0], dtype=torch.float)
-        for num_pol in range(k):
-            i = np.argwhere(points_pol_indexes_filtered == num_pol)
-            if len(i) != 0:
-                map_data['map_point']['magnitude'][i[0]] = torch.tensor(0, dtype=torch.float)
-                if len(i) > 1:
-                    map_data['map_point']['magnitude'][i[1:]] = torch.tensor(np.linalg.norm(points_filtered[i[1:],0:2]-points_filtered[i[:-1],0:2], axis=2), dtype=torch.float)
+        #map_data['map_point']['magnitude'] = torch.zeros(points_filtered.shape[0], dtype=torch.float)
+        # The magnitude is probably computed wrongly, we need to fix it
+        #for num_pol in range(k):
+        #    i = np.argwhere(points_pol_indexes_filtered == num_pol)
+        #    map_data['map_point']['magnitude'][i,1:] 
+
+        #    if len(i) != 0:
+        #        map_data['map_point']['magnitude'][i[0]] = torch.tensor(0, dtype=torch.float)
+        #        if len(i) > 1:
+        #            map_data['map_point']['magnitude'][i[1:]] = torch.tensor(np.linalg.norm(points_filtered[i[1:],0:2]-points_filtered[i[:-1],0:2], axis=2), dtype=torch.float)
         map_data['map_point']['num_nodes'] = points_filtered.shape[0]
         map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor(np.array([points_indexes, points_pol_indexes_filtered]), dtype=torch.long)
 
         # Get the polygon data ("map_polygon")
         map_data['map_polygon'] = {}
-        map_data[('map_polygon', 'to', 'map_polygon')] = {}
+        #map_data[('map_polygon', 'to', 'map_polygon')] = {}
 
         # Get from points_pol_indexes_filtered the first index of each polygon
         first_indexes = np.unique(points_pol_indexes_filtered, return_index=True)[1]
@@ -169,28 +184,27 @@ class QCNetDataset(BaseDataset):
         #    indexes_other_pol = np.delete(np.arange(first_indexes.shape[0]),i)
         #    if len(indexes_other_pol) > 0:
         #        map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'] = torch.cat((map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'], torch.tensor([np.repeat(i,len(indexes_other_pol)), indexes_other_pol], dtype=torch.long), 1))
-        
+
         # Return the map data
         return map_data
 
     def _target_definition(self,agent):
+        # Get the origin and the theta at the first time step
         origin = agent['position'][:, self.config.num_historical_steps - 1]
         theta = agent['heading'][:, self.config.num_historical_steps - 1].squeeze()
+
+        # Define the target
         cos, sin = theta.cos(), theta.sin()
         rot_mat = theta.new_zeros(agent['num_nodes'], 2, 2)
         rot_mat[:, 0, 0] = cos
         rot_mat[:, 0, 1] = -sin
         rot_mat[:, 1, 0] = sin
         rot_mat[:, 1, 1] = cos
-        agent['target'] = origin.new_zeros(agent['num_nodes'], self.num_future_steps, 4)
-        agent['target'][..., :2] = torch.bmm(agent['position'][:, self.config.num_historical_steps:, :2] -
-                                                            origin[:, :2].unsqueeze(1), rot_mat)
-        if agent['position'].size(2) == 3:
-            agent['target'][..., 2] = (agent['position'][:, self.config.num_historical_steps:, 2] -
-                                                    origin[:, 2].unsqueeze(-1))
-            
-        agent['target'][..., 3] = wrap_angle(agent['heading'][:, self.config.num_historical_steps:].squeeze() -
-                                                                theta.unsqueeze(-1))
+        agent['target'] = origin.new_zeros(agent['num_nodes'], self.config.num_future_steps, 4)
+        agent['target'][..., :2] = torch.bmm(agent['position'][:, self.config.num_historical_steps:, :2] - origin[:, :2].unsqueeze(1), rot_mat)
+        agent['target'][..., 3] = wrap_angle(agent['heading'][:, self.config.num_historical_steps:].squeeze() - theta.unsqueeze(-1))
+        
+        # Return the target
         return agent['target']
     
     def _append_gt_data(self,data):
