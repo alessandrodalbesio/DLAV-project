@@ -40,6 +40,8 @@ class QCNetMapEncoder(nn.Module):
                  head_dim: int,
                  dropout: float) -> None:
         super(QCNetMapEncoder, self).__init__()
+
+        # Define the parameters from the arguments
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_historical_steps = num_historical_steps
@@ -51,31 +53,40 @@ class QCNetMapEncoder(nn.Module):
         self.dropout = dropout
 
         # Define the input dimensions for the embeddings
-        input_dim_x_pt = 1
-        input_dim_x_pl = 0
+        input_dim_x_pt = 3
+        input_dim_x_pl = 3
         input_dim_r_pt2pl = 3
         input_dim_r_pl2pl = 3
 
         # Define some embeddings
-        self.type_pt_emb = nn.Embedding(20, hidden_dim) # Changed from 17 to 6
-        self.side_pt_emb = nn.Embedding(3, hidden_dim)
-        self.type_pl_emb = nn.Embedding(20, hidden_dim) # Changed from 4 to 6
-        self.int_pl_emb = nn.Embedding(3, hidden_dim)
-        
+        self.type_pt_emb = nn.Embedding(20, hidden_dim)
+        self.type_pl_emb = nn.Embedding(20, hidden_dim)
         self.type_pl2pl_emb = nn.Embedding(5, hidden_dim)
         self.x_pt_emb = FourierEmbedding(input_dim=input_dim_x_pt, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
         self.x_pl_emb = FourierEmbedding(input_dim=input_dim_x_pl, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
-        self.r_pt2pl_emb = FourierEmbedding(input_dim=input_dim_r_pt2pl, hidden_dim=hidden_dim,
-                                            num_freq_bands=num_freq_bands)
-        self.r_pl2pl_emb = FourierEmbedding(input_dim=input_dim_r_pl2pl, hidden_dim=hidden_dim,
-                                            num_freq_bands=num_freq_bands)
+        self.r_pt2pl_emb = FourierEmbedding(input_dim=input_dim_r_pt2pl, hidden_dim=hidden_dim,num_freq_bands=num_freq_bands)
+        self.r_pl2pl_emb = FourierEmbedding(input_dim=input_dim_r_pl2pl, hidden_dim=hidden_dim,num_freq_bands=num_freq_bands)
         self.pt2pl_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(
+                    hidden_dim=hidden_dim, 
+                    num_heads=num_heads, 
+                    head_dim=head_dim, 
+                    dropout=dropout,
+                    bipartite=True, 
+                    has_pos_emb=True
+                ) for _ in range(num_layers)]
         )
         self.pl2pl_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(
+                    hidden_dim=hidden_dim, 
+                    num_heads=num_heads, 
+                    head_dim=head_dim, 
+                    dropout=dropout,
+                    bipartite=False, 
+                    has_pos_emb=True
+                ) for _ in range(num_layers)]
         )
         self.apply(weight_init)
 
@@ -89,22 +100,15 @@ class QCNetMapEncoder(nn.Module):
         orient_pl = data['map_polygon']['orientation'].contiguous()
         orient_vector_pl = torch.stack([orient_pl.cos(), orient_pl.sin()], dim=-1)
 
-        # Define x_pt and x_pl
-        x_pt = data['map_point']['magnitude'].unsqueeze(-1)
-        x_pl = None
+        # Use the position to create x_pt
+        x_pt = torch.cat((pos_pt[:, :2], orient_pt.unsqueeze(-1)), dim=-1)
+        x_pt = self.x_pt_emb(continuous_inputs=x_pt, categorical_embs=[self.type_pt_emb(data['map_point']['type'].long())])
 
-        # ToDo readd categorical embs
-        # x_pt_categorical_embs = [self.type_pt_emb(data['map_point']['type'].long()),
-        #                             self.side_pt_emb(data['map_point']['side'].long())]
-        # x_pl_categorical_embs = [self.type_pl_emb(data['map_polygon']['type'].long()),
-        #                             self.int_pl_emb(data['map_polygon']['is_intersection'].long())]
+        # Use the position to create x_pl
+        x_pl = torch.cat((pos_pl[:, :2], orient_pl.unsqueeze(-1)), dim=-1)
+        x_pl = self.x_pl_emb(continuous_inputs=x_pl, categorical_embs=[self.type_pl_emb(data['map_polygon']['type'].long())])
 
-        x_pt_categorical_embs = [self.type_pt_emb(data['map_point']['type'].long())]
-        x_pl_categorical_embs = [self.type_pl_emb(data['map_polygon']['type'].long())]
-
-        x_pt = self.x_pt_emb(continuous_inputs=x_pt, categorical_embs=x_pt_categorical_embs) # ToDo categorical embs
-        x_pl = self.x_pl_emb(continuous_inputs=x_pl, categorical_embs=x_pl_categorical_embs) # ToDo categorical embs
-
+        # Compute the attention between the point and the polygons
         edge_index_pt2pl = data['map_point', 'to', 'map_polygon']['edge_index']
         rel_pos_pt2pl = pos_pt[edge_index_pt2pl[0]] - pos_pl[edge_index_pt2pl[1]]
         rel_orient_pt2pl = wrap_angle(orient_pt[edge_index_pt2pl[0]] - orient_pl[edge_index_pt2pl[1]])
@@ -114,31 +118,25 @@ class QCNetMapEncoder(nn.Module):
                 angle_between_2d_vectors(ctr_vector=orient_vector_pl[edge_index_pt2pl[1]],nbr_vector=rel_pos_pt2pl[:, :2]),
                 rel_orient_pt2pl
             ], dim=-1)
-            
-        r_pt2pl = self.r_pt2pl_emb(continuous_inputs=r_pt2pl, categorical_embs=None)
+        r_pt2pl = self.r_pt2pl_emb(continuous_inputs=r_pt2pl)
 
-        # edge_index_pl2pl = data['map_polygon', 'to', 'map_polygon']['edge_index']
-        # edge_index_pl2pl_radius = radius_graph(x=pos_pl[:, :2], r=self.pl2pl_radius,
-        #                                        batch=data['map_polygon']['batch'] if isinstance(data, Batch) else None,
-        #                                        loop=False, max_num_neighbors=300)
-        # type_pl2pl = data['map_polygon', 'to', 'map_polygon']['type']
-        # type_pl2pl_radius = type_pl2pl.new_zeros(edge_index_pl2pl_radius.size(1), dtype=torch.uint8)
-        # edge_index_pl2pl, type_pl2pl = merge_edges(edge_indices=[edge_index_pl2pl_radius, edge_index_pl2pl],
-        #                                            edge_attrs=[type_pl2pl_radius, type_pl2pl], reduce='max')
-        # rel_pos_pl2pl = pos_pl[edge_index_pl2pl[0]] - pos_pl[edge_index_pl2pl[1]]
-        # rel_orient_pl2pl = wrap_angle(orient_pl[edge_index_pl2pl[0]] - orient_pl[edge_index_pl2pl[1]])
-        
-        # r_pl2pl = torch.stack(
-        #     [torch.norm(rel_pos_pl2pl[:, :2], p=2, dim=-1),
-        #         angle_between_2d_vectors(ctr_vector=orient_vector_pl[edge_index_pl2pl[1]],
-        #                                 nbr_vector=rel_pos_pl2pl[:, :2]),
-        #         rel_orient_pl2pl], dim=-1)
-    
-        # r_pl2pl = self.r_pl2pl_emb(continuous_inputs=r_pl2pl, categorical_embs=[self.type_pl2pl_emb(type_pl2pl.long())])
+        # Compute the attention between the polygons
+        edge_index_pl2pl = data['map_polygon', 'to', 'map_polygon']['edge_index']
+        rel_pos_pl2pl = pos_pl[edge_index_pl2pl[0]] - pos_pl[edge_index_pl2pl[1]]
+        rel_orient_pl2pl = wrap_angle(orient_pl[edge_index_pl2pl[0]] - orient_pl[edge_index_pl2pl[1]])
+        r_pl2pl = torch.stack(
+            [
+                torch.norm(rel_pos_pl2pl[:, :2], p=2, dim=-1),
+                angle_between_2d_vectors(ctr_vector=orient_vector_pl[edge_index_pl2pl[1]],nbr_vector=rel_pos_pl2pl[:, :2]),
+                rel_orient_pl2pl
+            ], dim=-1)
+        r_pl2pl = self.r_pl2pl_emb(continuous_inputs=r_pl2pl)
 
+        # Apply the attention layers
         for i in range(self.num_layers):
-            x_pl = self.pt2pl_layers[i]((x_pt, x_pl), r_pt2pl, edge_index_pt2pl) #, r_pt2pl, edge_index_pt2pl)
-            # ToDo x_pl = self.pl2pl_layers[i](x_pl, r_pl2pl, edge_index_pl2pl)
-        x_pl = x_pl.repeat_interleave(repeats=self.num_historical_steps,dim=0).reshape(-1, self.num_historical_steps, self.hidden_dim)
+            x_pl = self.pt2pl_layers[i]((x_pt, x_pl), r_pt2pl, edge_index_pt2pl)
+            x_pl = self.pl2pl_layers[i](x_pl, r_pl2pl, edge_index_pl2pl)
+        x_pl = x_pl.repeat_interleave(repeats=self.num_historical_steps,dim=0).reshape(-1, self.num_historical_steps,self.hidden_dim)
 
+        # Return the results
         return {'x_pt': x_pt, 'x_pl': x_pl}

@@ -84,13 +84,9 @@ class QCNetDecoder(nn.Module):
 
         # Fourier embedding ( continuous data ): target agent, map elements, neighbor agents, output
         self.r_t2m_emb = FourierEmbedding(input_dim=input_dim_r_t, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands) # target agent to mode query
-        self.r_pl2m_emb = FourierEmbedding(input_dim=input_dim_r_pl2m, hidden_dim=hidden_dim,                            # map element to mode query                                      
-                                           num_freq_bands=num_freq_bands)
-        
-        self.r_a2m_emb = FourierEmbedding(input_dim=input_dim_r_a2m, hidden_dim=hidden_dim,                              # neighbor agent to mode query
-                                          num_freq_bands=num_freq_bands)
-        self.y_emb = FourierEmbedding(input_dim=output_dim + output_head, hidden_dim=hidden_dim,                         # output embedding                           
-                                      num_freq_bands=num_freq_bands)
+        self.r_pl2m_emb = FourierEmbedding(input_dim=input_dim_r_pl2m, hidden_dim=hidden_dim,num_freq_bands=num_freq_bands)
+        self.r_a2m_emb = FourierEmbedding(input_dim=input_dim_r_a2m, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
+        self.y_emb = FourierEmbedding(input_dim=output_dim + output_head, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
         
         # GRU layer for trajectory embedding
         self.traj_emb = nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=1, bias=True,
@@ -100,52 +96,52 @@ class QCNetDecoder(nn.Module):
         # DEFINITION OF ATTENTION LAYERS
         # Traj Proposal: cross attention layers
         self.t2m_propose_attn_layers = nn.ModuleList(                                                       # target agent to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         self.pl2m_propose_attn_layers = nn.ModuleList(                                                      # map element to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         self.a2m_propose_attn_layers = nn.ModuleList(                                                       # neighbor agent to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         # Traj Proposal: self attention layer
-        self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                     dropout=dropout, bipartite=False, has_pos_emb=False)
+        self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=False, has_pos_emb=False)
         
         # Traj Refinement: cross attention layers
         self.t2m_refine_attn_layers = nn.ModuleList(                                                        # target agent to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         self.pl2m_refine_attn_layers = nn.ModuleList(                                                       # map element to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         self.a2m_refine_attn_layers = nn.ModuleList(                                                        # neighbor agent to mode query
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            [
+                AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+            ]
         )
         # Traj Refinement: self attention layer
-        self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                    dropout=dropout, bipartite=False, has_pos_emb=False)
+        self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,dropout=dropout, bipartite=False, has_pos_emb=False)
         
         # MLP LAYERS: i-th agent trajectory is parametrized  as a mixture of Laplacian distrib. in which the mixed component
         # density at time step t is parametrized by:
         # - loc_propose_pos: location of agent (Lpropose mixture component)
-        self.to_loc_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
-                                           output_dim=num_future_steps * output_dim // num_recurrent_steps)
+        self.to_loc_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim, output_dim=num_future_steps * output_dim // num_recurrent_steps)
         # - scale_propose_pos: scale of agent (Lpropose mixture component)
-        self.to_scale_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
-                                             output_dim=num_future_steps * output_dim // num_recurrent_steps)
+        self.to_scale_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,output_dim=num_future_steps * output_dim // num_recurrent_steps)
         # - loc_propose_head: location of agent (Lrefine mixture component)  
-        self.to_loc_refine_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
-                                          output_dim=num_future_steps * output_dim)
+        self.to_loc_refine_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim, output_dim=num_future_steps * output_dim)
         # - scale_propose_head: scale of agent (Lrefine mixture component)
-        self.to_scale_refine_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
-                                            output_dim=num_future_steps * output_dim)
+        self.to_scale_refine_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim, output_dim=num_future_steps * output_dim)
         if output_head:
             # loc stands for location, conc stands for concentration
             self.to_loc_propose_head = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,

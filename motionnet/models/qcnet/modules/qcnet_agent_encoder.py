@@ -61,26 +61,22 @@ class QCNetAgentEncoder(nn.Module):
         input_dim_r_pl2a = 3
         input_dim_r_a2a = 3
 
-        self.type_a_emb = nn.Embedding(10, hidden_dim)
+        self.type_a_emb = nn.Embedding(5, hidden_dim)
 
         self.x_a_emb = FourierEmbedding(input_dim=input_dim_x_a, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
         self.r_t_emb = FourierEmbedding(input_dim=input_dim_r_t, hidden_dim=hidden_dim, num_freq_bands=num_freq_bands)
-        self.r_pl2a_emb = FourierEmbedding(input_dim=input_dim_r_pl2a, hidden_dim=hidden_dim,
-                                           num_freq_bands=num_freq_bands)
-        self.r_a2a_emb = FourierEmbedding(input_dim=input_dim_r_a2a, hidden_dim=hidden_dim,
-                                          num_freq_bands=num_freq_bands)
-        self.t_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2a_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2a_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
-        )
+        self.r_pl2a_emb = FourierEmbedding(input_dim=input_dim_r_pl2a, hidden_dim=hidden_dim,num_freq_bands=num_freq_bands)
+        self.r_a2a_emb = FourierEmbedding(input_dim=input_dim_r_a2a, hidden_dim=hidden_dim,num_freq_bands=num_freq_bands)
+
+        self.t_attn_layers = nn.ModuleList([
+            AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=False, has_pos_emb=True) for _ in range(num_layers)
+        ])
+        self.pl2a_attn_layers = nn.ModuleList([
+            AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout, bipartite=True, has_pos_emb=True) for _ in range(num_layers)
+        ])
+        self.a2a_attn_layers = nn.ModuleList([
+            AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,bipartite=False, has_pos_emb=True) for _ in range(num_layers)
+        ])
         self.apply(weight_init)
 
     def forward(self, data: HeteroData, map_enc: Mapping[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -104,13 +100,7 @@ class QCNetAgentEncoder(nn.Module):
         # Get the velocity of the agent
         vel = data['agent']['velocity'][:, :self.num_historical_steps, :self.input_dim].contiguous()
 
-        # Missing information (to understand if we can remove it)
-        length = width = height = None
-        categorical_embs = [
-            self.type_a_emb(data['agent']['type'].long()).repeat_interleave(repeats=self.num_historical_steps,dim=0),
-        ]
-
-        # Agent embedding (Polar coordinates)
+        # Agent embedding
         x_a = torch.stack(
             [
                 torch.norm(motion_vector_a[:, :, :2], p=2, dim=-1),                                       #motion vector: radius
@@ -133,7 +123,7 @@ class QCNetAgentEncoder(nn.Module):
         rel_head_t = wrap_angle(head_t[edge_index_t[0]] - head_t[edge_index_t[1]])          
         r_t = torch.stack(                                                                  
             [
-            torch.norm(rel_pos_t[:, :2], p=2, dim=-1),                                                              # relative distance
+                torch.norm(rel_pos_t[:, :2], p=2, dim=-1),                                                          # relative distance
                 angle_between_2d_vectors(ctr_vector=head_vector_t[edge_index_t[1]], nbr_vector=rel_pos_t[:, :2]),   # relative direction
                 rel_head_t,                                                                                         # relative orientation
                 edge_index_t[0] - edge_index_t[1]                                                                   # time gap
@@ -148,23 +138,12 @@ class QCNetAgentEncoder(nn.Module):
         pos_pl = pos_pl.repeat(self.num_historical_steps, 1)
         orient_pl = orient_pl.repeat(self.num_historical_steps)
         if isinstance(data, Batch):
-            batch_s = torch.cat(
-                [
-                    data['agent']['batch'] + data.num_graphs * t for t in range(self.num_historical_steps)
-                ], dim=0)
-            batch_pl = torch.cat(
-                [
-                    data['map_polygon']['batch'] + data.num_graphs * t for t in range(self.num_historical_steps)
-                ], dim=0)
+            batch_s = torch.cat([data['agent']['batch'] + data.num_graphs * t for t in range(self.num_historical_steps)], dim=0)
+            batch_pl = torch.cat([data['map_polygon']['batch'] + data.num_graphs * t for t in range(self.num_historical_steps)], dim=0)
         else:
-            batch_s = torch.arange(
-                self.num_historical_steps,
-                device=pos_a.device
-            ).repeat_interleave(data['agent']['num_nodes'])
-            batch_pl = torch.arange(
-                self.num_historical_steps,
-                device=pos_pl.device
-            ).repeat_interleave(data['map_polygon']['num_nodes'])
+            batch_s = torch.arange(self.num_historical_steps,device=pos_a.device).repeat_interleave(data['agent']['num_nodes'])
+            batch_pl = torch.arange(self.num_historical_steps,device=pos_pl.device).repeat_interleave(data['map_polygon']['num_nodes'])
+        
         edge_index_pl2a = radius(
             x=pos_s[:, :2], 
             y=pos_pl[:, :2], 

@@ -45,10 +45,14 @@ class QCNetDataset(BaseDataset):
                 self.data_loaded_memory[i][0] = HeteroData(self.prepare_data(self.data_loaded_memory[i][0]))
 
     def __getitem__(self, idx):
+        # Get the item from super
+        item = super().__getitem__(idx)[0]
+
+        # Return the item
         if self.config['store_data_in_memory']:
-            return self.data_loaded_memory[idx][0]
+            return item
         else:
-            return HeteroData(self.prepare_data(self.data_loaded[idx][0]))
+            return HeteroData(self.prepare_data(item))
 
     def _convert_agent_data(self,elem):
         # Define the number of valid agents
@@ -142,13 +146,6 @@ class QCNetDataset(BaseDataset):
         map_data['map_point']['orientation'] = torch.tensor(np.arctan2(points_filtered[:,4],points_filtered[:,3]), dtype=torch.float)
         map_data['map_point']['height'] = torch.tensor(points_filtered[:,2], dtype=torch.float)
         map_data['map_point']['type'] = torch.tensor(points_filtered[:,6], dtype=torch.int)
-        map_data['map_point']['magnitude'] = torch.zeros(points_filtered.shape[0], dtype=torch.float)
-        for num_pol in range(k):
-            i = np.argwhere(points_pol_indexes_filtered == num_pol)
-            if len(i) != 0:
-                map_data['map_point']['magnitude'][i[0]] = torch.tensor(0, dtype=torch.float)
-                if len(i) > 1:
-                    map_data['map_point']['magnitude'][i[1:]] = torch.tensor(np.linalg.norm(points_filtered[i[1:],0:2]-points_filtered[i[:-1],0:2], axis=2), dtype=torch.float)
         map_data['map_point']['num_nodes'] = points_filtered.shape[0]
         map_data[('map_point','to','map_polygon')]['edge_index'] = torch.tensor(np.array([points_indexes, points_pol_indexes_filtered]), dtype=torch.long)
 
@@ -164,12 +161,11 @@ class QCNetDataset(BaseDataset):
         map_data['map_polygon']['type'] = torch.tensor(points_filtered[first_indexes,6], dtype=torch.int)
         map_data['map_polygon']['num_nodes'] = first_indexes.shape[0]
         
-        # Associate for each polygon index all the other polygon indexes
-        #for i in range(first_indexes.shape[0]):
-        #    indexes_other_pol = np.delete(np.arange(first_indexes.shape[0]),i)
-        #    if len(indexes_other_pol) > 0:
-        #        map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'] = torch.cat((map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'], torch.tensor([np.repeat(i,len(indexes_other_pol)), indexes_other_pol], dtype=torch.long), 1))
-        
+        # Define the number of polygons
+        N = first_indexes.shape[0]
+        array = np.array([(i, j) for i in range(0, N) for j in range(0, N) if i != j])
+        map_data[('map_polygon', 'to', 'map_polygon')]['edge_index'] = torch.tensor(array.T, dtype=torch.long)
+
         # Return the map data
         return map_data
 
@@ -184,14 +180,10 @@ class QCNetDataset(BaseDataset):
         rot_mat[:, 1, 1] = cos
         num_future_steps = self.config['num_future_steps']
         agent['target'] = origin.new_zeros(agent['num_nodes'], num_future_steps, 4)
-        agent['target'][..., :2] = torch.bmm(agent['position'][:, self.config.num_historical_steps:, :2] -
-                                                            origin[:, :2].unsqueeze(1), rot_mat)
+        agent['target'][..., :2] = torch.bmm(agent['position'][:, self.config.num_historical_steps:, :2] - origin[:, :2].unsqueeze(1), rot_mat)
         if agent['position'].size(2) == 3:
-            agent['target'][..., 2] = (agent['position'][:, self.config.num_historical_steps:, 2] -
-                                                    origin[:, 2].unsqueeze(-1))
-            
-        agent['target'][..., 3] = wrap_angle(agent['heading'][:, self.config.num_historical_steps:].squeeze() -
-                                                                theta.unsqueeze(-1))
+            agent['target'][..., 2] = (agent['position'][:, self.config.num_historical_steps:, 2] - origin[:, 2].unsqueeze(-1))
+        agent['target'][..., 3] = wrap_angle(agent['heading'][:, self.config.num_historical_steps:].squeeze() - theta.unsqueeze(-1))
         return agent['target']
     
     def _append_gt_data(self,data):
