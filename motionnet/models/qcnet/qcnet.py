@@ -87,7 +87,7 @@ class Criterion(nn.Module):
           modes_pred: [B, K], prior prob over modes
           noise is optional
         """
-        data = data.squeeze()
+        data = data.squeeze(1)
         modes_pred = output['predicted_probability']
         pred = output['predicted_trajectory'].permute(1,2,0,3)
         mask = data[..., -1]
