@@ -15,7 +15,7 @@ import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.transforms import BaseTransform
 
-from utils import wrap_angle
+from motionnet.models.qcnet.utils import wrap_angle
 
 
 class TargetBuilder(BaseTransform):
