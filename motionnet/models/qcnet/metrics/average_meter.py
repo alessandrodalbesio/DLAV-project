@@ -11,14 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from motionnet.utils.geometry import angle_between_2d_vectors
-from motionnet.utils.geometry import angle_between_3d_vectors
-from motionnet.utils.geometry import side_to_directed_lineseg
-from motionnet.utils.geometry import wrap_angle
-from motionnet.utils.graph import add_edges
-from motionnet.utils.graph import bipartite_dense_to_sparse
-from motionnet.utils.graph import complete_graph
-from motionnet.utils.graph import merge_edges
-from motionnet.utils.graph import unbatch
-from motionnet.utils.list import safe_list_index
-from motionnet.utils.weight_init import weight_init
+import torch
+from torchmetrics import Metric
+
+
+class AverageMeter(Metric):
+
+    def __init__(self, **kwargs) -> None:
+        super(AverageMeter, self).__init__(**kwargs)
+        self.add_state('sum', default=torch.tensor(0.0), dist_reduce_fx='sum')
+        self.add_state('count', default=torch.tensor(0), dist_reduce_fx='sum')
+
+    def update(self, val: torch.Tensor) -> None:
+        self.sum += val.sum()
+        self.count += val.numel()
+
+    def compute(self) -> torch.Tensor:
+        if self.count == 0:
+            return torch.tensor(0.0)
+        return self.sum / self.count

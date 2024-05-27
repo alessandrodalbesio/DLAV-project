@@ -11,14 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from motionnet.utils.geometry import angle_between_2d_vectors
-from motionnet.utils.geometry import angle_between_3d_vectors
-from motionnet.utils.geometry import side_to_directed_lineseg
-from motionnet.utils.geometry import wrap_angle
-from motionnet.utils.graph import add_edges
-from motionnet.utils.graph import bipartite_dense_to_sparse
-from motionnet.utils.graph import complete_graph
-from motionnet.utils.graph import merge_edges
-from motionnet.utils.graph import unbatch
-from motionnet.utils.list import safe_list_index
-from motionnet.utils.weight_init import weight_init
+import torch
+import torch.nn as nn
+from torchvision.ops import sigmoid_focal_loss
+
+
+class FocalLoss(nn.Module):
+
+    def __init__(self,
+                 alpha: float = 0.25,
+                 gamma: float = 2.0,
+                 reduction: str = 'mean'):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self,
+                pred: torch.Tensor,
+                target: torch.Tensor) -> torch.Tensor:
+        return sigmoid_focal_loss(pred, target, self.alpha, self.gamma, self.reduction)

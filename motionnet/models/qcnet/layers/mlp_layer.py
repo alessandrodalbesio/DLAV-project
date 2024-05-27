@@ -11,14 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from motionnet.utils.geometry import angle_between_2d_vectors
-from motionnet.utils.geometry import angle_between_3d_vectors
-from motionnet.utils.geometry import side_to_directed_lineseg
-from motionnet.utils.geometry import wrap_angle
-from motionnet.utils.graph import add_edges
-from motionnet.utils.graph import bipartite_dense_to_sparse
-from motionnet.utils.graph import complete_graph
-from motionnet.utils.graph import merge_edges
-from motionnet.utils.graph import unbatch
-from motionnet.utils.list import safe_list_index
-from motionnet.utils.weight_init import weight_init
+import torch
+import torch.nn as nn
+
+from utils import weight_init
+
+
+class MLPLayer(nn.Module):
+
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dim: int,
+                 output_dim: int) -> None:
+        super(MLPLayer, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, output_dim),
+        )
+        self.apply(weight_init)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mlp(x)

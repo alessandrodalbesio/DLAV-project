@@ -185,3 +185,5 @@ SCITAS/logs/
 
 # Ignore the experiments folder
 SCITAS/experiments/
+
+.data

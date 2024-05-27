@@ -20,7 +20,7 @@ This repository contains the code for the project of the course "Deep Learning f
 ## Team members
 This project has been done by (alphabetically ordered):
 - Alessandro Dalbesio (SCIPER ID: 359822)
-- Elisa Ferrara (SCIPER ID: )
+- Elisa Ferrara (SCIPER ID: 371064)
 
 ## Installation
 
@@ -51,47 +51,19 @@ pip install -e .
 wandb login
 ```
 
-## Main files
-### `ptr.py`
-This Python script defines a neural network model specifically designed for predicting future trajectories of agents in a dynamic environment, using a combination of convolutional and transformer-based architectures to process both image-based and point-based map data. It utilizes attention mechanisms to integrate social and temporal contexts, predicting multiple possible future paths by generating trajectory distributions, and calculates associated probabilities for each predicted mode.
-### `ptr.yaml`
-This YAML file contains the default configuration settings for the neural network model, including the number of input channels, hidden dimensions, number of transformer layers, dropout rate, and other architectural parameters. It also specifies the hyperparameters for training, such as the learning rate, batch size, and number of epochs. <br>
-From this file you can also set the data augmentation mode desired (see <a href="ptr_dataset.py">ptr_dataset.py</a> ) . In particular you can choose between On Circle ("on_circle"), In Circle ("in_circle"), Hide Car ("hide_car"). You can also select no augmentation ("None").
-### `config.yaml`
-This YAML file contains the default configuration settings for the training script. It also specifies the paths to the training and validation datasets, the directory for saving model checkpoints, and the number of GPUs to use for training. <br>
-Here you can also define your optimizer and your scheduler. Currently we support the followings: 
-- Optimizer: Adam ("adam"), AdamW ("adamw"), SGD ("sgd") ;
-- Scheduler: Multistep ("multistep"), Plateau ("plateau").
-Note that in case of multistep scheduler you can specify the learning rate decade in "learning_rate_sched"
-Other optimizers or schedulers can be added in the config.yaml file.
-### `ptr_dataset.py`
-This Python script creates a specific dataset for the ptr model. Using the __get_item__ method we implemented varous data augmentation possibilities. In particular you can choose the desider augmentation mode from the ptr.yaml file.
-- On Circle augmentation. For a certain percentage of cars some points in the trajectory are moved by a fixed radius distance from their original point with a certain probability. Radius is defined in ptr.yaml
-- In Circle augmentation. For a certain percentage of cars some points in the trajectory are moved by at maximum a fixed radius distance from their original point with a certain probability. Radius is defined in ptr.yaml
-- Hide Cars augmentation. A certain percentage of points in the cars' trajectories are hidden.
-### `train.py`
-This Python script uses PyTorch Lightning and Hydra to set up and execute the training of a machine learning model, with configurations loaded and managed dynamically via Hydra from a specified directory. It prepares the training and validation datasets, utilizes data loaders with custom batch sizes, and sets up a training loop with model checkpoints based on validation performance, supporting both local and distributed training environments depending on the configuration.
+## Implemented models
+In this branch we implemented the following models:
+- PTR
+- Our modified version of QCNet
 
-### `test_generator.py`
-This file can be used to generate multiple configuration files for different hyperparameters. It is particularly useful to automate a grid search process.
-### `scheduler.sh`
-This file can be used to manage the copy of the configuration files generated with `test_generator.py` in the correct directory and to run the training script for each configuration.
-### `run_scheduler.sbatch`
-This file can be used to run the grid search process on a cluster.
-### `run_submission.sbatch`
-This file can be used to run the code needed to generate the submission file for the competition.
-
-
-
-## How to use the code
-1) Follow the installation instructions above
-2) Use a GPU tu train the model. You can find the training and validation dataset at this link: https://drive.google.com/drive/u/0/folders/1ta4Mw09DXrk3MPM4XGwwG79VZzE4NfLJ . Save the dataset and update the path in config.yaml. The default position is `DLAV-project/.datasets/`.
-3) Here you have two possibilities:
-    - If you are doing a grid search then define the parameters in `test_generator.py`.
-    - If you are not doing a grid search then update manually the parameters in `config.yaml` and in `ptr.yaml`.
-4) Run the sbatch file on your terminal (i.e. `sbatch run_scheduler.sbatch` if you are doing a grid search or `sbatch run_training.sbatch` if you are not doing a grid search).
-
-
-
-
-
+## Code structure
+The code is structured as follows:
+- ```checkpoints```: In this folder the checkpoints of the models are saved.
+- ```configs```: In this folder there are the configuration files for the models. The ```config.yaml``` file contains the default configuration settings for the training script. Then in the folder ```method``` there are the configuration files for the models.
+- ```dataloader```: In this folder there are the dataloaders for the models.
+- ```datasets```: In this folder there are the datasets for the models. Here the post-processing of the data is done together with the data manipulation.
+- ```models```: In this folder there are the models implemented.
+- ```utils```: In this folder there are the utility functions used in the code.
+- ```generate_predictions.py```: This file can be used to generate the predictions for the kaggle competition.
+- ```k_means.py```: This file can be used to generate the k-means clustering of the data.
+- ```train.py```: This file can be used to train the models.
