@@ -3,3 +3,6 @@ torch
 pytorch-lightning
 hydra-core
 scikit-learn
+torchvision
+torch_geometric
+torch_cluster
