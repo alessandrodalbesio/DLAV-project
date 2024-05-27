@@ -40,7 +40,7 @@ def train(cfg):
     call_backs.append(checkpoint_callback)
 
     # Define the build dataloader function
-    train_loader = build_dataloader(train_set,train_batch_size,cfg)
+    train_loader = build_dataloader(train_set,train_batch_size,cfg,shuffle=True)
     val_loader = build_dataloader(val_set,eval_batch_size,cfg,shuffle=False)
 
     # Define the trainer
@@ -51,7 +51,7 @@ def train(cfg):
         gradient_clip_val=cfg.method.grad_clip_norm,
         accelerator="cpu" if cfg.debug else "gpu",
         profiler="simple",
-        strategy="auto" if cfg.debug else "ddp",
+        strategy="auto" if cfg.debug else "ddp_find_unused_parameters_true",
         callbacks=call_backs
     )
 
